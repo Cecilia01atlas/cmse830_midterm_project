@@ -74,52 +74,30 @@ fig_temp.update_layout(
 st.plotly_chart(fig_temp, use_container_width=True)
 
 # ---------------------------------------------------
-# 2. Regression Heatmap (WLS)
+# 2. Correlation Heatmap
 # ---------------------------------------------------
-st.header("2️⃣ Weighted Regression Coefficients")
+st.header("2️⃣ Correlation Heatmap")
 
-feature_columns = ["zon_winds", "mer_winds", "humidity", "air_temp"]
-target_variable = "ss_temp"
+selected_features = ["zon_winds", "mer_winds", "humidity", "air_temp", "ss_temp"]
 
-year_counts = df["year"].value_counts()
-df["weight"] = df["year"].map(lambda y: 1 / year_counts[y])
+# Ensure numeric
+subset_df = df[selected_features].apply(pd.to_numeric, errors="coerce").dropna()
 
-df_numeric = df[feature_columns + [target_variable, "weight"]].apply(
-    pd.to_numeric, errors="coerce"
+correlation_matrix = subset_df.corr().values
+
+fig_corr = ff.create_annotated_heatmap(
+    z=correlation_matrix,
+    x=selected_features,
+    y=selected_features,
+    colorscale="Viridis",
+    showscale=True,
 )
-
-coef_dict = {}
-for col in feature_columns:
-    X = sm.add_constant(df_numeric[[col]])
-    y = df_numeric[target_variable]
-    w = df_numeric["weight"]
-
-    mask = X.notnull().all(axis=1) & y.notnull() & np.isfinite(w)
-    X_clean = X.loc[mask]
-    y_clean = y.loc[mask]
-    w_clean = w.loc[mask]
-
-    model = sm.WLS(y_clean, X_clean, weights=w_clean)
-    results = model.fit()
-    coef_dict[col] = results.params[col]
-
-coef_df = pd.DataFrame.from_dict(coef_dict, orient="index", columns=["Slope"])
-
-fig_heatmap = go.Figure(
-    data=go.Heatmap(
-        z=coef_df.values.T,
-        x=coef_df.index,
-        y=[target_variable + " (slope)"],
-        colorscale="Viridis",
-        showscale=True,
-    )
-)
-fig_heatmap.update_layout(
-    title="Weighted Regression Coefficients",
+fig_corr.update_layout(
+    title="Correlation Heatmap of Climate Variables",
     xaxis_title="Features",
-    yaxis_title="Target",
+    yaxis_title="Features",
 )
-st.plotly_chart(fig_heatmap, use_container_width=True)
+st.plotly_chart(fig_corr, use_container_width=True)
 
 # ---------------------------------------------------
 # 3. Scatterplot with regression line
