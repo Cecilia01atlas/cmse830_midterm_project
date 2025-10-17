@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from fetch_ucirepo import fetch_ucirepo
+from ucimlrepo import fetch_ucirepo
 
 
 # --- Load datasets ---
