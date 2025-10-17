@@ -45,9 +45,9 @@ choice = st.sidebar.radio("Menu", menu)
 if choice == "Overview":
     st.title("Dataset Overview")
 
-    # 1️⃣ Column information first
+    # 1️⃣ Column names only
     st.subheader("Column Information")
-    st.write(pd.DataFrame(el_nino.variables))
+    st.write(pd.DataFrame({"Columns": df.columns}))
 
     # 2️⃣ First 15 rows
     st.subheader("First 15 Rows of the Dataset")
@@ -58,17 +58,7 @@ if choice == "Overview":
     numeric_df = df.drop(columns=["year", "month", "day", "date"], errors="ignore")
     st.write(numeric_df.describe())
 
-    # 4️⃣ Missing values
-    st.subheader("Missing Values per Column")
-    missing_counts = df.isna().sum()
-    st.bar_chart(missing_counts)
-
-    # 5️⃣ Duplicates
-    st.subheader("Duplicates in Dataset")
-    duplicates = df.duplicated().sum()
-    st.write(f"Number of duplicate rows: {duplicates}")
-
-    # 6️⃣ Temporal coverage over time (year-month)
+    # 4️⃣ Temporal coverage over time (year-month)
     st.subheader("Temporal Coverage Over Time (Year-Month)")
     df["year_month"] = (
         df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
@@ -80,6 +70,16 @@ if choice == "Overview":
     ax.set_ylabel("Number of Records")
     plt.xticks(rotation=90)
     st.pyplot(fig)
+
+    # 5️⃣ Missing values
+    st.subheader("Missing Values per Column")
+    missing_counts = df.isna().sum()
+    st.bar_chart(missing_counts)
+
+    # 6️⃣ Duplicates
+    st.subheader("Duplicates in Dataset")
+    duplicates = df.duplicated().sum()
+    st.write(f"Number of duplicate rows: {duplicates}")
 
     # 7️⃣ Outlier detection
     st.subheader("Outlier Detection (Z-score > 3)")
