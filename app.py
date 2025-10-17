@@ -83,22 +83,17 @@ if choice == "Overview":
     plt.xticks(rotation=90)
     st.pyplot(fig)
 
-    # 5️⃣ Missing values
-    st.subheader("Missing Values per Column")
-    missing_counts = df.isna().sum()
-    st.bar_chart(missing_counts)
-
     # 5️⃣ Missing values (visual)
     st.subheader("Missing Values per Column")
     missing_counts = df.isna().sum()
     st.bar_chart(missing_counts)
 
-    # 5b️⃣ Heatmap for missing values
+    # Heatmap for missing values
     st.subheader("Missing Values Heatmap Over Time")
     nan_mask = df.isna()
     nan_array = nan_mask.astype(int).to_numpy()
 
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(20, 10))
     im = ax.imshow(nan_array.T, interpolation="nearest", aspect="auto", cmap="viridis")
 
     ax.set_ylabel("Features")
