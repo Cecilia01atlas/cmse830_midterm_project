@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-from ucimlrepo import fetch_ucirepo
+from fetch_ucirepo import fetch_ucirepo  # keep this, it works locally
 
 
-# --- Load datasets ---
+# ---------------------------------------------------
+# Load data once at start (cache for performance)
+# ---------------------------------------------------
 @st.cache_data
 def load_data():
     # Fetch dataset
@@ -15,18 +15,21 @@ def load_data():
     Y = el_nino.data.targets
     df = pd.concat([X, Y], axis=1)
 
-    # Second dataset
+    # Fix year and create date column (same as your working code)
+    df["year"] = df["year"] + 1900
+    df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
+    df = df.sort_values("date").reset_index(drop=True)
+
+    # --- Merge second dataset safely ---
     enso = pd.read_csv("data_index.csv")
-
-    # Convert 2-digit years to 4-digit
-    df["year"] = df["year"].apply(lambda x: 1900 + x if x < 100 else x)
-
-    # Merge datasets
+    # Only merge year and month; drop duplicates in enso if needed
+    enso = enso.drop_duplicates(subset=["year", "month"])
     df = df.merge(enso, on=["year", "month"], how="left")
 
-    return df, el_nino
+    return df, el_nino  # keep el_nino for column info if needed
 
 
+# Load dataset
 df, el_nino = load_data()
 
 # --- Sidebar Menu ---
@@ -92,10 +95,10 @@ if choice == "Overview":
         "ClimAdjust",
         "ANOM",
     ]
-
     outlier_dict = {}
     for col in numeric_cols:
-        z_col = (df[col] - df[col].mean()) / df[col].std()
-        outliers = (z_col.abs() > 3).sum()
-        outlier_dict[col] = outliers
+        if col in df.columns:  # only calculate if column exists after merge
+            z_col = (df[col] - df[col].mean()) / df[col].std()
+            outliers = (z_col.abs() > 3).sum()
+            outlier_dict[col] = outliers
     st.write(pd.DataFrame.from_dict(outlier_dict, orient="index", columns=["Outliers"]))
