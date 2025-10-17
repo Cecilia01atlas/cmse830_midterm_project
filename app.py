@@ -45,9 +45,21 @@ choice = st.sidebar.radio("Menu", menu)
 if choice == "Overview":
     st.title("Dataset Overview")
 
-    # 1️⃣ Column names only
+    # 1️⃣ Column information
     st.subheader("Column Information")
-    st.write(pd.DataFrame(el_nino.variables))
+
+    col_info = pd.DataFrame(
+        {
+            "Column": df.columns,
+            "Role": [
+                el_nino.variables[col]["role"] if col in el_nino.variables else "-"
+                for col in df.columns
+            ],
+            "Type": df.dtypes.values,
+            "Missing Values": df.isna().sum().values,
+        }
+    )
+    st.dataframe(col_info)
 
     # 2️⃣ First 15 rows
     st.subheader("First 15 Rows of the Dataset")
@@ -75,6 +87,37 @@ if choice == "Overview":
     st.subheader("Missing Values per Column")
     missing_counts = df.isna().sum()
     st.bar_chart(missing_counts)
+
+    # 5️⃣ Missing values (visual)
+    st.subheader("Missing Values per Column")
+    missing_counts = df.isna().sum()
+    st.bar_chart(missing_counts)
+
+    # 5b️⃣ Heatmap for missing values
+    st.subheader("Missing Values Heatmap Over Time")
+    nan_mask = df.isna()
+    nan_array = nan_mask.astype(int).to_numpy()
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    im = ax.imshow(nan_array.T, interpolation="nearest", aspect="auto", cmap="viridis")
+
+    ax.set_ylabel("Features")
+    ax.set_title("Visualizing Missing Values Over Time")
+    ax.set_yticks(range(len(df.columns)))
+    ax.set_yticklabels(df.columns)
+
+    # Reduce x-axis ticks for readability
+    n_rows = len(df)
+    n_ticks = min(10, n_rows)
+    tick_positions = np.linspace(0, n_rows - 1, n_ticks).astype(int)
+    tick_labels = df.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+
+    ax.set_xlabel("Date")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.7)
+    plt.tight_layout()
+    st.pyplot(fig)
 
     # 6️⃣ Duplicates
     st.subheader("Duplicates in Dataset")
