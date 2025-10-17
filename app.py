@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
-from fetch_ucirepo import fetch_ucirepo  # keep this, it works locally
+import plotly.express as px
+import plotly.graph_objs as go
+import plotly.figure_factory as ff
+from ucimlrepo import fetch_ucirepo
+import statsmodels.api as sm
 
 
 # ---------------------------------------------------
