@@ -47,7 +47,7 @@ if choice == "Overview":
 
     # 1️⃣ Column names only
     st.subheader("Column Information")
-    st.write(pd.DataFrame({"Columns": df.columns}))
+    st.write(pd.DataFrame(el_nino.variables))
 
     # 2️⃣ First 15 rows
     st.subheader("First 15 Rows of the Dataset")
