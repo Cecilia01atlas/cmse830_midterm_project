@@ -1,120 +1,101 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objs as go
-import plotly.figure_factory as ff
-from ucimlrepo import fetch_ucirepo
-import statsmodels.api as sm
+import matplotlib.pyplot as plt
+import seaborn as sns
+from fetch_ucirepo import fetch_ucirepo
 
 
-# ---------------------------------------------------
-# Load data once at start (cache for performance)
-# ---------------------------------------------------
+# --- Load datasets ---
 @st.cache_data
 def load_data():
+    # Fetch dataset
     el_nino = fetch_ucirepo(id=122)
     X = el_nino.data.features
     Y = el_nino.data.targets
     df = pd.concat([X, Y], axis=1)
 
-    # Fix year and create date column
-    df["year"] = df["year"] + 1900
-    df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
-    df = df.sort_values("date").reset_index(drop=True)
-    return df
+    # Second dataset
+    enso = pd.read_csv("data_index.csv")
+
+    # Convert 2-digit years to 4-digit
+    df["year"] = df["year"].apply(lambda x: 1900 + x if x < 100 else x)
+
+    # Merge datasets
+    df = df.merge(enso, on=["year", "month"], how="left")
+
+    return df, el_nino
 
 
-df = load_data()
+df, el_nino = load_data()
 
-st.title("🌊 El Niño / La Niña Data Explorer")
-st.write(
-    "Exploring sea surface temperature trends and their relationship with other variables."
-)
+# --- Sidebar Menu ---
+menu = ["Overview", "Visualization 1", "Visualization 2", "Visualization 3"]
+choice = st.sidebar.radio("Menu", menu)
 
-# ---------------------------------------------------
-# 1. Sea Surface Temperature: Daily vs Monthly
-# ---------------------------------------------------
-st.header("1️⃣ Sea Surface Temperature Over Time")
+# --- Tab 1: Overview ---
+if choice == "Overview":
+    st.title("Dataset Overview")
 
-numeric_cols = df.select_dtypes(include="number").columns
+    st.subheader("First 15 Rows of the Dataset")
+    st.dataframe(df.head(15))
 
-# Daily averages
-df_daily = df.groupby("date")[numeric_cols].mean().reset_index()
+    st.subheader("Summary Statistics")
+    st.write(df.describe())
 
-# Monthly averages
-df_monthly = df.set_index("date")[numeric_cols].resample("M").mean().reset_index()
+    st.subheader("Column Information")
+    st.write(pd.DataFrame(el_nino.variables))
 
-fig_temp = go.Figure()
-fig_temp.add_trace(
-    go.Scatter(
-        x=df_daily["date"],
-        y=df_daily["ss_temp"],
-        mode="markers",
-        marker=dict(size=3, color="royalblue", opacity=0.5),
-        name="Daily Avg",
+    st.subheader("Missing Values per Column")
+    missing_counts = df.isna().sum()
+    st.bar_chart(missing_counts)
+
+    st.subheader("Duplicates in Dataset")
+    duplicates = df.duplicated().sum()
+    st.write(f"Number of duplicate rows: {duplicates}")
+
+    st.subheader("Temporal Coverage by Year")
+    year_counts = df["year"].value_counts().sort_index()
+    fig, ax = plt.subplots(figsize=(12, 4))
+    year_counts.plot(kind="bar", ax=ax)
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Number of Records")
+    st.pyplot(fig)
+
+    st.subheader("Temporal Coverage by Month")
+    month_counts = df["month"].value_counts().sort_index()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    month_counts.plot(kind="bar", ax=ax)
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Number of Records")
+    st.pyplot(fig)
+
+    st.subheader("Temporal Coverage Over Time (Year-Month)")
+    df["year_month"] = (
+        df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
     )
-)
-fig_temp.add_trace(
-    go.Scatter(
-        x=df_monthly["date"],
-        y=df_monthly["ss_temp"],
-        mode="lines",
-        line=dict(color="darkorange", width=2),
-        name="Monthly Avg",
-    )
-)
-fig_temp.update_layout(
-    title="Sea Surface Temperature: Daily vs Monthly Average",
-    xaxis_title="Date",
-    yaxis_title="Sea Surface Temperature (°C)",
-    template="plotly_white",
-    legend=dict(x=0.02, y=0.98),
-)
-st.plotly_chart(fig_temp, use_container_width=True)
+    ym_counts = df["year_month"].value_counts().sort_index()
+    fig, ax = plt.subplots(figsize=(15, 4))
+    ym_counts.plot(ax=ax)
+    ax.set_xlabel("Year-Month")
+    ax.set_ylabel("Number of Records")
+    plt.xticks(rotation=90)
+    st.pyplot(fig)
 
-# ---------------------------------------------------
-# 2. Correlation Heatmap
-# ---------------------------------------------------
-st.header("2️⃣ Correlation Heatmap")
+    st.subheader("Outlier Detection (Z-score > 3)")
+    numeric_cols = [
+        "zon_winds",
+        "mer_winds",
+        "humidity",
+        "air_temp",
+        "ss_temp",
+        "ClimAdjust",
+        "ANOM",
+    ]
 
-selected_features = ["zon_winds", "mer_winds", "humidity", "air_temp", "ss_temp"]
-
-# Ensure numeric
-subset_df = df[selected_features].apply(pd.to_numeric, errors="coerce").dropna()
-
-correlation_matrix = subset_df.corr().values
-
-fig_corr = ff.create_annotated_heatmap(
-    z=correlation_matrix,
-    x=selected_features,
-    y=selected_features,
-    colorscale="Viridis",
-    showscale=True,
-)
-fig_corr.update_layout(
-    title="Correlation Heatmap of Climate Variables",
-    xaxis_title="Features",
-    yaxis_title="Features",
-)
-st.plotly_chart(fig_corr, use_container_width=True)
-
-# ---------------------------------------------------
-# 3. Scatterplot with regression line
-# ---------------------------------------------------
-st.header("3️⃣ Air Temperature vs Sea Surface Temperature")
-
-df_plot = df[["air_temp", "ss_temp"]].apply(pd.to_numeric, errors="coerce").dropna()
-
-fig_scatter = px.scatter(
-    df_plot,
-    x="air_temp",
-    y="ss_temp",
-    trendline="ols",
-    labels={
-        "air_temp": "Air Temperature (°C)",
-        "ss_temp": "Sea Surface Temperature (°C)",
-    },
-    title="Scatterplot with Regression Line",
-)
-st.plotly_chart(fig_scatter, use_container_width=True)
+    outlier_dict = {}
+    for col in numeric_cols:
+        z_col = (df[col] - df[col].mean()) / df[col].std()
+        outliers = (z_col.abs() > 3).sum()
+        outlier_dict[col] = outliers
+    st.write(pd.DataFrame.from_dict(outlier_dict, orient="index", columns=["Outliers"]))
