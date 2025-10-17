@@ -45,39 +45,30 @@ choice = st.sidebar.radio("Menu", menu)
 if choice == "Overview":
     st.title("Dataset Overview")
 
-    st.subheader("First 15 Rows of the Dataset")
-    st.dataframe(df.head(15))
-
-    st.subheader("Summary Statistics")
-    st.write(df.describe())
-
+    # 1️⃣ Column information first
     st.subheader("Column Information")
     st.write(pd.DataFrame(el_nino.variables))
 
+    # 2️⃣ First 15 rows
+    st.subheader("First 15 Rows of the Dataset")
+    st.dataframe(df.head(15))
+
+    # 3️⃣ Summary statistics (exclude year, month, day, date)
+    st.subheader("Summary Statistics")
+    numeric_df = df.drop(columns=["year", "month", "day", "date"], errors="ignore")
+    st.write(numeric_df.describe())
+
+    # 4️⃣ Missing values
     st.subheader("Missing Values per Column")
     missing_counts = df.isna().sum()
     st.bar_chart(missing_counts)
 
+    # 5️⃣ Duplicates
     st.subheader("Duplicates in Dataset")
     duplicates = df.duplicated().sum()
     st.write(f"Number of duplicate rows: {duplicates}")
 
-    st.subheader("Temporal Coverage by Year")
-    year_counts = df["year"].value_counts().sort_index()
-    fig, ax = plt.subplots(figsize=(12, 4))
-    year_counts.plot(kind="bar", ax=ax)
-    ax.set_xlabel("Year")
-    ax.set_ylabel("Number of Records")
-    st.pyplot(fig)
-
-    st.subheader("Temporal Coverage by Month")
-    month_counts = df["month"].value_counts().sort_index()
-    fig, ax = plt.subplots(figsize=(10, 4))
-    month_counts.plot(kind="bar", ax=ax)
-    ax.set_xlabel("Month")
-    ax.set_ylabel("Number of Records")
-    st.pyplot(fig)
-
+    # 6️⃣ Temporal coverage over time (year-month)
     st.subheader("Temporal Coverage Over Time (Year-Month)")
     df["year_month"] = (
         df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
@@ -90,6 +81,7 @@ if choice == "Overview":
     plt.xticks(rotation=90)
     st.pyplot(fig)
 
+    # 7️⃣ Outlier detection
     st.subheader("Outlier Detection (Z-score > 3)")
     numeric_cols = [
         "zon_winds",
@@ -102,7 +94,7 @@ if choice == "Overview":
     ]
     outlier_dict = {}
     for col in numeric_cols:
-        if col in df.columns:  # only calculate if column exists after merge
+        if col in df.columns:
             z_col = (df[col] - df[col].mean()) / df[col].std()
             outliers = (z_col.abs() > 3).sum()
             outlier_dict[col] = outliers
