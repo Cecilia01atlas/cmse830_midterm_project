@@ -192,7 +192,7 @@ Understanding **which variables and time periods are missing** is critical befor
         nan_array.T,
         interpolation="nearest",
         aspect="auto",
-        cmap="Greys",  # 👈 Try "Greys", "coolwarm", or "YlOrRd" for different looks
+        cmap="coolwarm",
     )
 
     ax.set_ylabel("Features")
