@@ -478,21 +478,26 @@ Use the dropdown below to select which variable you'd like to explore over time.
 elif choice == "Correlation study":
     st.header("📊 Correlation and Feature Relationships")
     st.markdown("""
-This tab explores relationships between key variables:
-- Correlation heatmap shows **how variables co-vary**.
-- Scatter plot examines **air temperature vs sea surface temperature**, highlighting the linear relationship.
-- Pairwise scatter matrix shows interactions between all selected variables.
-- Binned line plots summarize **average SST per air temperature bin** across months.
+Understanding how **atmospheric and oceanic variables interact** is crucial to explaining the ENSO phenomenon.
+
+- 🌡 **Air and Sea Surface Temperature** are tightly linked — warming of the Pacific surface during El Niño affects atmospheric patterns globally.  
+- 💨 **Zonal and meridional winds** drive surface currents and influence upwelling.  
+- 💧 **Humidity** connects ocean evaporation with atmospheric moisture content.
+
+This tab explores these **relationships statistically and visually**, helping us detect patterns consistent with ENSO dynamics.
 """)
+
+    df = st.session_state["df"].copy()
     selected_features = ["zon_winds", "mer_winds", "humidity", "air_temp", "ss_temp"]
     subset_df = df[selected_features].apply(pd.to_numeric, errors="coerce").dropna()
 
     # --- Correlation heatmap ---
+    st.subheader("🔸 Correlation Heatmap")
     corr_matrix = subset_df.corr().values
     mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
     masked_corr = np.where(mask, None, corr_matrix)[::-1]
 
-    fig = go.Figure(
+    fig_corr = go.Figure(
         data=go.Heatmap(
             z=masked_corr,
             x=selected_features,
@@ -505,24 +510,39 @@ This tab explores relationships between key variables:
             showscale=True,
         )
     )
+
+    # Annotate correlation coefficients
     for i, row in enumerate(masked_corr):
         for j, val in enumerate(row):
             if val is not None:
-                fig.add_annotation(
+                fig_corr.add_annotation(
                     x=selected_features[j],
                     y=selected_features[::-1][i],
                     text=f"{val:.2f}",
+                    font=dict(color="black"),
                     showarrow=False,
                 )
-    fig.update_layout(title="Correlation Heatmap", xaxis=dict(tickangle=-45))
-    st.plotly_chart(fig, use_container_width=True)
+
+    fig_corr.update_layout(
+        title=dict(text="Correlation Heatmap of Key Variables", x=0.5),
+        xaxis=dict(tickangle=-45),
+        yaxis=dict(autorange="reversed"),
+        plot_bgcolor="white",
+    )
+    st.plotly_chart(fig_corr, use_container_width=True)
 
     # --- Scatter with regression ---
+    st.subheader("🔸 Air Temperature vs Sea Surface Temperature")
+    st.markdown("""
+A strong **linear relationship** is expected between **air temperature** and **sea surface temperature**, since warm ocean waters heat the air above them.  
+This scatter plot includes a regression line to highlight this dependency.
+""")
+
     fig_scatter = px.scatter(
         df,
         x="air_temp",
         y="ss_temp",
-        opacity=0.4,
+        opacity=0.5,
         trendline="ols",
         trendline_color_override="red",
         labels={
@@ -538,6 +558,45 @@ This tab explores relationships between key variables:
         plot_bgcolor="white",
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
+
+    # --- Pairwise scatter matrix ---
+    st.subheader("🔸 Pairwise Relationships")
+    st.markdown("""
+This scatter matrix allows us to **visually inspect relationships between all variables simultaneously**.  
+Patterns like linear trends or clusters may indicate physical couplings or ENSO-related structures.
+""")
+    fig_matrix = px.scatter_matrix(
+        subset_df,
+        dimensions=selected_features,
+        title="Pairwise Scatter Matrix of Selected Variables",
+        opacity=0.5,
+    )
+    fig_matrix.update_traces(diagonal_visible=False)
+    fig_matrix.update_layout(height=800)
+    st.plotly_chart(fig_matrix, use_container_width=True)
+
+    # --- Binned line plots ---
+    st.subheader("🔸 Binned Sea Surface Temperature by Air Temperature")
+    st.markdown("""
+Finally, we **bin air temperatures** and calculate the **average sea surface temperature per bin** to smooth out noise and highlight trends across months.
+""")
+    df["air_temp_bin"] = pd.cut(df["air_temp"], bins=15)
+    binned = df.groupby(["air_temp_bin", "month"])["ss_temp"].mean().reset_index()
+    binned["air_temp_bin_center"] = binned["air_temp_bin"].apply(lambda x: x.mid)
+
+    fig_binned = px.line(
+        binned,
+        x="air_temp_bin_center",
+        y="ss_temp",
+        color="month",
+        labels={
+            "air_temp_bin_center": "Binned Air Temperature (°C)",
+            "ss_temp": "Mean Sea Surface Temperature (°C)",
+            "month": "Month",
+        },
+        title="Binned SST vs Air Temperature by Month",
+    )
+    st.plotly_chart(fig_binned, use_container_width=True)
 
 
 # ----------------------------
