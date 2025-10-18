@@ -81,7 +81,7 @@ Below, you can explore:
             "Missing Values": df.isna().sum().values,
         }
     )
-    st.dataframe(col_info)
+    st.dataframe(col_info.astype(str))
 
     # --- Summary statistics ---
     st.subheader("Summary Statistics")
@@ -154,7 +154,7 @@ Understanding **which variables and time periods are missing** is critical befor
             "Missing %": (df.isna().mean() * 100).round(2),
         }
     ).sort_values("Missing Values", ascending=False)
-    st.dataframe(summary_table)
+    st.dataframe(summary_table.astype(str))
 
     # --- Missingness heatmap ---
     st.markdown("""
@@ -263,8 +263,7 @@ Stochastic noise is added to mimic natural variability.
         st.pyplot(fig)
         st.success("Humidity imputation complete ✅")
         st.write("Remaining missing values per column after imputation:")
-        st.write(df.isna().sum())
-
+        st.write(df.isna().sum().astype(str))
 
 # ================================================
 # Tab 3: Temporal Coverage
