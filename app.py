@@ -87,10 +87,6 @@ Below, you can explore:
     )
     st.dataframe(col_info)
 
-    # --- First rows ---
-    st.subheader("First 15 Rows of the Dataset")
-    st.dataframe(df.head(15))
-
     # --- Summary statistics ---
     st.subheader("Summary Statistics")
     numeric_df = df.drop(columns=["year", "month", "day", "date"], errors="ignore")
@@ -175,31 +171,50 @@ Understanding **which variables and time periods are missing** is critical befor
     how we handle imputation. Here we explore the structure of missing values in the dataset.
     """)
 
-    # Select columns for missingness heatmap (exclude time-related columns)
-    cols_for_heatmap = [
-        col for col in df.columns if col not in ["day", "month", "year"]
-    ]
+    ## --- Exclude day, month, and year for missingness heatmap ---
+    excluded_cols = ["day", "month", "year"]
+    cols_for_heatmap = [col for col in df.columns if col not in excluded_cols]
 
-    # Plot missingness heatmap
-    plt.figure(figsize=(14, 6))  # slightly wider for clarity
-    sns.heatmap(df[cols_for_heatmap].isna(), cbar=False)
-    plt.title("Missingness Heatmap (Excluding Day/Month/Year)", fontsize=14)
-    st.pyplot(plt.gcf())
-    plt.close()
+    nan_mask = df[cols_for_heatmap].copy()
 
-    # Table of missing value counts
-    missing_table = (
-        df[cols_for_heatmap]
-        .isna()
-        .sum()
-        .reset_index()
-        .rename(columns={"index": "Variable", 0: "Missing Values"})
+    # Restore original humidity if it exists
+    if "humidity_original" in df.columns:
+        nan_mask["humidity"] = df["humidity_original"]
+
+    # Create missingness array
+    nan_array = nan_mask.isna().astype(int).to_numpy()
+
+    # Plot heatmap
+    fig, ax = plt.subplots(figsize=(24, 12))
+
+    # Use a high-contrast colormap (0 = white, 1 = dark)
+    im = ax.imshow(
+        nan_array.T,
+        interpolation="nearest",
+        aspect="auto",
+        cmap="Greys",  # 👈 Try "Greys", "coolwarm", or "YlOrRd" for different looks
     )
-    missing_table["% Missing"] = (missing_table["Missing Values"] / len(df)) * 100
-    missing_table = missing_table.sort_values(by="Missing Values", ascending=False)
 
-    st.subheader("📊 Missing Values Summary")
-    st.dataframe(missing_table, use_container_width=True)
+    ax.set_ylabel("Features")
+    ax.set_title("Missing Values Heatmap (1 = Missing, 0 = Present)")
+
+    # Y-axis: feature names
+    ax.set_yticks(range(len(cols_for_heatmap)))
+    ax.set_yticklabels(cols_for_heatmap)
+
+    # X-axis: date ticks (up to 15 evenly spaced)
+    n_rows = len(df)
+    n_ticks = min(15, n_rows)
+    tick_positions = np.linspace(0, n_rows - 1, n_ticks).astype(int)
+    tick_labels = df.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+
+    ax.grid(True, axis="y", linestyle="--", alpha=0.5)
+    fig.colorbar(im, ax=ax, label="Missingness")
+
+    plt.tight_layout()
+    st.pyplot(fig)
 
     # --- Humidity Imputation ---
     st.subheader("Humidity Imputation")
