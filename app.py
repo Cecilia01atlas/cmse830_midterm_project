@@ -38,11 +38,14 @@ def load_data():
 # Load dataset
 df, el_nino = load_data()
 
+if "df" in st.session_state:
+    df = st.session_state["df"].copy()
+
 # --- Sidebar Menu ---
 menu = [
     "Overview",
     "Missingness",
-    "temporal_coverage",
+    "Temporal Coverage",
     "Visualization 2",
     "Visualization 3",
 ]
@@ -171,20 +174,25 @@ elif choice == "Missingness":
     if st.button("Run Humidity Imputation"):
         from sklearn.linear_model import LinearRegression
 
-        # Copy original humidity
-        df["humidity_original"] = df["humidity"].copy()
+        # If already imputed, use session_state version
+        if "df" in st.session_state:
+            df = st.session_state["df"].copy()
+
+        # Preserve original humidity for comparison
+        if "humidity_original" not in df.columns:
+            df["humidity_original"] = df["humidity"].copy()
 
         feature_cols = ["air_temp", "ss_temp"]
         target_col = "humidity"
 
-        # Missing fraction per year
+        # --- Identify years to impute ---
         missing_per_year = df.groupby("year")[target_col].apply(
             lambda x: x.isna().mean()
         )
         threshold = 0.5
         years_to_impute = missing_per_year[missing_per_year > threshold].index
 
-        # Training data
+        # --- Train model ---
         mask_train = df[feature_cols].notna().all(axis=1) & df[target_col].notna()
         X_train = df.loc[mask_train, feature_cols]
         y_train = df.loc[mask_train, target_col]
@@ -193,7 +201,7 @@ elif choice == "Missingness":
         model.fit(X_train, y_train)
         residual_std = np.std(y_train - model.predict(X_train))
 
-        # Rows to impute
+        # --- Rows to impute ---
         mask_impute = (
             df[feature_cols].notna().all(axis=1)
             & df[target_col].isna()
@@ -201,6 +209,7 @@ elif choice == "Missingness":
         )
         X_missing = df.loc[mask_impute, feature_cols]
 
+        # --- Stochastic predictions ---
         n_simulations = 100
         stochastic_predictions = []
         for _ in range(n_simulations):
@@ -208,9 +217,13 @@ elif choice == "Missingness":
             stochastic_predictions.append(model.predict(X_missing) + noise)
         y_imputed = np.mean(stochastic_predictions, axis=0)
 
+        # --- Apply imputation ---
         df.loc[mask_impute, target_col] = y_imputed
 
-        # Plot before vs imputed
+        # --- Save back to session_state ---
+        st.session_state["df"] = df.copy()
+
+        # --- Plot before vs imputed ---
         fig, ax = plt.subplots(figsize=(14, 5))
         ax.scatter(
             df.loc[mask_impute, "date"],
@@ -229,16 +242,16 @@ elif choice == "Missingness":
         st.pyplot(fig)
 
         st.success("Humidity imputation complete ✅")
-        st.write("Remaining missing values per column:")
+        st.write("Remaining missing values per column after imputation:")
         st.write(df.isna().sum())
 
 
-# ---------------------------- Temporal Coverage Tab ----------------------------
-elif choice == "temporal_coverage":
+# --- Tab 3: Temporal coverage ---
+elif choice == "Temporal Coverage":
     st.header("📅 Temporal Coverage")
 
     # --- Dropdown to select feature ---
-    numeric_cols = ["humidity", "air_temp", "ss_temp"]  # extend if needed
+    numeric_cols = ["humidity", "air_temp", "ss_temp", "zon_winds", "mer_winds"]
     feature = st.selectbox(
         "Select variable to visualize:",
         options=numeric_cols,
