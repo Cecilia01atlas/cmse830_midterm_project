@@ -77,10 +77,6 @@ Below, you can explore:
     col_info = pd.DataFrame(
         {
             "Column": df.columns,
-            "Role": [
-                el_nino.variables[col]["role"] if col in el_nino.variables else "-"
-                for col in df.columns
-            ],
             "Type": df.dtypes.values,
             "Missing Values": df.isna().sum().values,
         }
