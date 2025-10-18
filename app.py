@@ -40,7 +40,13 @@ else:
     st.session_state["df"] = df.copy()
 
 # --- Sidebar Menu ---
-menu = ["Overview", "Missingness", "Temporal Coverage", "Visualization 2"]
+menu = [
+    "Overview",
+    "Missingness",
+    "Temporal Coverage",
+    "Correlation study",
+    "Summary and Conclusion",
+]
 choice = st.sidebar.radio("Menu", menu)
 
 # ================================================
@@ -294,10 +300,11 @@ This tab shows how variables evolve over time and highlights periods affected by
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
+
 # ================================================
-# Tab 4: Visualization 2 - Correlation & Scatter
+# Tab 4: Correlation & Scatter
 # ================================================
-elif choice == "Visualization 2":
+elif choice == "Correlation study":
     st.header("📊 Correlation and Feature Relationships")
     st.markdown("""
 This tab explores relationships between key variables:
@@ -360,3 +367,133 @@ This tab explores relationships between key variables:
         plot_bgcolor="white",
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
+
+    # ----------------------------
+# Tab 5: ENSO Summary
+# ----------------------------
+elif choice == "Summary and Conclusion":
+    st.title("🌊 ENSO Summary and Insights")
+    st.markdown("""
+This tab summarizes the **impact of ENSO (El Niño / La Niña) events** on the ocean-atmosphere system:
+
+- **El Niño:** Warmer sea surface temperatures (SST), increased air temperature, sometimes lower humidity.
+- **La Niña:** Cooler SST, slightly cooler air, potential increases in humidity.
+- **ENSO Index (ANOM):** Used to identify the strength and timing of events.
+""")
+
+    df_daily = (
+        df.groupby("date")[["ss_temp", "air_temp", "humidity", "ANOM"]]
+        .mean()
+        .reset_index()
+    )
+    el_thresh, la_thresh = 1.0, -1.0
+    df_daily["event"] = np.where(
+        df_daily["ANOM"] > el_thresh,
+        "El Niño",
+        np.where(df_daily["ANOM"] < la_thresh, "La Niña", None),
+    )
+
+    # Aggregate by ENSO event
+    event_summary = []
+    current_event = None
+    start_date = None
+    for _, row in df_daily.iterrows():
+        event, date = row["event"], row["date"]
+        if event != current_event:
+            if current_event is not None:
+                segment = df_daily[
+                    (df_daily["date"] >= start_date) & (df_daily["date"] < date)
+                ]
+                event_summary.append(
+                    {
+                        "event": current_event,
+                        "start": start_date,
+                        "end": date,
+                        "avg_sst": segment["ss_temp"].mean(),
+                        "avg_air_temp": segment["air_temp"].mean(),
+                        "avg_humidity": segment["humidity"].mean(),
+                    }
+                )
+            current_event = event
+            start_date = date
+    if current_event is not None:
+        segment = df_daily[df_daily["date"] >= start_date]
+        event_summary.append(
+            {
+                "event": current_event,
+                "start": start_date,
+                "end": df_daily["date"].iloc[-1],
+                "avg_sst": segment["ss_temp"].mean(),
+                "avg_air_temp": segment["air_temp"].mean(),
+                "avg_humidity": segment["humidity"].mean(),
+            }
+        )
+
+    summary_df = pd.DataFrame(event_summary)
+    st.subheader("Average Conditions per ENSO Event")
+    st.dataframe(
+        summary_df[["event", "start", "end", "avg_sst", "avg_air_temp", "avg_humidity"]]
+    )
+
+    # Interactive time series with ENSO shading
+    fig = go.Figure()
+    for period in event_summary:
+        if period["event"] is None:
+            continue
+        color = (
+            "rgba(255,0,0,0.1)" if period["event"] == "El Niño" else "rgba(0,0,255,0.1)"
+        )
+        fig.add_vrect(
+            x0=period["start"],
+            x1=period["end"],
+            fillcolor=color,
+            opacity=0.3,
+            layer="below",
+            line_width=0,
+        )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df_daily["date"],
+            y=df_daily["ss_temp"],
+            mode="lines",
+            name="SST (°C)",
+            line=dict(color="royalblue"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df_daily["date"],
+            y=df_daily["air_temp"],
+            mode="lines",
+            name="Air Temp (°C)",
+            line=dict(color="orange"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df_daily["date"],
+            y=df_daily["humidity"],
+            mode="lines",
+            name="Humidity (%)",
+            line=dict(color="green"),
+        )
+    )
+
+    fig.update_layout(
+        title="SST, Air Temp, and Humidity with ENSO Shading",
+        template="plotly_white",
+        xaxis_title="Date",
+        yaxis_title="Value",
+        legend=dict(x=0.01, y=0.99),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Narrative conclusion
+    st.markdown("""
+**Insights:**
+- Peaks of **El Niño events** correspond to the warmest SST and elevated air temperature.
+- **La Niña events** tend to show cooler SST and slightly cooler air.
+- Humidity shows moderate fluctuations, often influenced by ENSO phase.
+- This demonstrates the **strong coupling between ocean temperatures and atmospheric conditions**, which affects climate patterns globally.
+""")
