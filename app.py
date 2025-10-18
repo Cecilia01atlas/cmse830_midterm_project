@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import plotly.express as px
 import plotly.graph_objs as go
-import seaborn as sns
 from ucimlrepo import fetch_ucirepo
 from sklearn.linear_model import LinearRegression
 
@@ -18,45 +18,39 @@ def load_data():
     X = el_nino.data.features
     Y = el_nino.data.targets
     df = pd.concat([X, Y], axis=1)
+
+    # Fix year and create date
     df["year"] = df["year"] + 1900
     df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
     df = df.sort_values("date").reset_index(drop=True)
+
+    # Merge ENSO index dataset
     enso = pd.read_csv("data_index.csv").drop_duplicates(subset=["year", "month"])
     df = df.merge(enso, on=["year", "month"], how="left")
+
     return df, el_nino
 
 
-# Load dataset
+# Load data
 df, el_nino = load_data()
 
-# -----------------------------
-# Session state initialization
-# -----------------------------
+# Ensure session_state persistence
 if "df" not in st.session_state:
     st.session_state["df"] = df.copy()
 
-if "humidity_original" not in st.session_state:
-    st.session_state["humidity_original"] = df["humidity"].copy()
-
-# Use df from session state
-df = st.session_state["df"]
+df = st.session_state["df"].copy()
 
 # --- Sidebar Menu ---
-menu = [
-    "Overview",
-    "Missingness",
-    "Temporal Coverage",
-    "Correlation study",
-    "Visualization 3",
-]
+menu = ["Overview", "Missingness", "Temporal Coverage", "Visualization 2"]
 choice = st.sidebar.radio("Menu", menu)
 
-# -----------------------------
+# ----------------------------
 # Tab 1: Overview
-# -----------------------------
+# ----------------------------
 if choice == "Overview":
     st.title("Dataset Overview")
 
+    # Column info
     st.subheader("Column Information")
     col_info = pd.DataFrame(
         {
@@ -71,14 +65,17 @@ if choice == "Overview":
     )
     st.dataframe(col_info)
 
+    # First 15 rows
     st.subheader("First 15 Rows of the Dataset")
     st.dataframe(df.head(15))
 
+    # Summary stats
     st.subheader("Summary Statistics")
     numeric_df = df.drop(columns=["year", "month", "day", "date"], errors="ignore")
     st.write(numeric_df.describe())
 
-    st.subheader("Temporal Coverage Over Time (Year-Month)")
+    # Temporal coverage (year-month)
+    st.subheader("Temporal Coverage Over Time")
     df["year_month"] = (
         df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
     )
@@ -90,10 +87,12 @@ if choice == "Overview":
     plt.xticks(rotation=90)
     st.pyplot(fig)
 
+    # Duplicates
     st.subheader("Duplicates in Dataset")
     duplicates = df.duplicated().sum()
     st.write(f"Number of duplicate rows: {duplicates}")
 
+    # Outlier detection
     st.subheader("Outlier Detection (Z-score > 3)")
     numeric_cols = [
         "zon_winds",
@@ -108,46 +107,46 @@ if choice == "Overview":
     for col in numeric_cols:
         if col in df.columns:
             z_col = (df[col] - df[col].mean()) / df[col].std()
-            outliers = (z_col.abs() > 3).sum()
-            outlier_dict[col] = outliers
+            outlier_dict[col] = (z_col.abs() > 3).sum()
     st.write(pd.DataFrame.from_dict(outlier_dict, orient="index", columns=["Outliers"]))
 
-# -----------------------------
+# ----------------------------
 # Tab 2: Missingness
-# -----------------------------
+# ----------------------------
 elif choice == "Missingness":
     st.title("Missingness Analysis")
 
-    # Bar chart & table use original humidity
-    df_heatmap = df.copy()
-    df_heatmap["humidity"] = st.session_state["humidity_original"]
-
+    # Missing values bar chart
     st.subheader("Missing Values per Column")
-    missing_counts = df_heatmap.isna().sum().sort_values(ascending=False)
+    missing_counts = df.isna().sum().sort_values(ascending=False)
     st.bar_chart(missing_counts)
 
+    # Summary table
     st.subheader("Missingness Summary Table")
     summary_table = pd.DataFrame(
         {
-            "Missing Values": df_heatmap.isna().sum(),
-            "Missing %": (df_heatmap.isna().mean() * 100).round(2),
+            "Missing Values": df.isna().sum(),
+            "Missing %": (df.isna().mean() * 100).round(2),
         }
     ).sort_values("Missing Values", ascending=False)
     st.dataframe(summary_table)
 
+    # Heatmap of missingness (original humidity)
     st.subheader("Heatmap of Missing Values Over Time")
-    nan_mask = df_heatmap.isna()
-    nan_array = nan_mask.astype(int).to_numpy()
+    nan_mask = df.copy()
+    if "humidity_original" in df.columns:
+        nan_mask["humidity"] = df["humidity_original"]
+    nan_array = nan_mask.isna().astype(int).to_numpy()
     fig, ax = plt.subplots(figsize=(24, 12))
     im = ax.imshow(nan_array.T, interpolation="nearest", aspect="auto", cmap="viridis")
     ax.set_ylabel("Features")
-    ax.set_title("Missing Values Heatmap (1 = Missing, 0 = Present)")
-    ax.set_yticks(range(len(df_heatmap.columns)))
-    ax.set_yticklabels(df_heatmap.columns)
-    n_rows = len(df_heatmap)
+    ax.set_title("Missing Values Heatmap (1=Missing, 0=Present)")
+    ax.set_yticks(range(len(df.columns)))
+    ax.set_yticklabels(df.columns)
+    n_rows = len(df)
     n_ticks = min(15, n_rows)
     tick_positions = np.linspace(0, n_rows - 1, n_ticks).astype(int)
-    tick_labels = df_heatmap.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
+    tick_labels = df.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
     ax.set_xticks(tick_positions)
     ax.set_xticklabels(tick_labels, rotation=45, ha="right")
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
@@ -158,12 +157,14 @@ elif choice == "Missingness":
     # Humidity imputation
     st.subheader("Humidity Imputation")
     st.markdown("""
-        Missing humidity values are imputed using a **linear regression** model with 
-        air temperature and sea surface temperature as predictors. 
-        Stochastic noise is added to mimic natural variability.
-    """)
-
+Missing humidity values are imputed using **linear regression** with air temperature and sea surface temperature as predictors.  
+Stochastic noise mimics natural variability.
+""")
     if st.button("Run Humidity Imputation"):
+        df = st.session_state["df"].copy()
+        if "humidity_original" not in df.columns:
+            df["humidity_original"] = df["humidity"].copy()
+
         feature_cols = ["air_temp", "ss_temp"]
         target_col = "humidity"
 
@@ -191,18 +192,18 @@ elif choice == "Missingness":
         X_missing = df.loc[mask_impute, feature_cols]
 
         # Stochastic predictions
-        n_simulations = 100
-        stochastic_predictions = []
-        for _ in range(n_simulations):
-            noise = np.random.normal(0, residual_std, size=X_missing.shape[0])
-            stochastic_predictions.append(model.predict(X_missing) + noise)
-        y_imputed = np.mean(stochastic_predictions, axis=0)
+        n_sim = 100
+        stochastic_preds = [
+            model.predict(X_missing)
+            + np.random.normal(0, residual_std, X_missing.shape[0])
+            for _ in range(n_sim)
+        ]
+        y_imputed = np.mean(stochastic_preds, axis=0)
 
-        # Apply imputation
         df.loc[mask_impute, target_col] = y_imputed
         st.session_state["df"] = df.copy()
 
-        # Plot before vs imputed
+        # Plot
         fig, ax = plt.subplots(figsize=(14, 5))
         ax.scatter(
             df.loc[mask_impute, "date"],
@@ -212,10 +213,7 @@ elif choice == "Missingness":
             label="Imputed",
         )
         ax.plot(
-            df["date"],
-            st.session_state["humidity_original"],
-            label="Original Humidity",
-            alpha=0.7,
+            df["date"], df["humidity_original"], label="Original Humidity", alpha=0.7
         )
         ax.set_xlabel("Date")
         ax.set_ylabel("Humidity (%)")
@@ -224,27 +222,33 @@ elif choice == "Missingness":
         st.pyplot(fig)
 
         st.success("Humidity imputation complete ✅")
-        st.write("Remaining missing values per column after imputation:")
+        st.write("Remaining missing values per column:")
         st.write(df.isna().sum())
 
-# -----------------------------
-# Tab 3: Temporal Coverage
-# -----------------------------
+# ----------------------------
+# Tab 3: Temporal Coverage + ENSO Story
+# ----------------------------
 elif choice == "Temporal Coverage":
-    st.header("📅 Temporal Coverage")
+    st.title("📅 Temporal Coverage & ENSO Story")
+    st.markdown("""
+El Niño and La Niña are opposite phases of the **ENSO** phenomenon.  
+They influence **sea surface temperature (SST)**, **air temperature**, and **humidity**.  
+
+Red = El Niño, Blue = La Niña. Explore how each variable responds to ENSO events.
+""")
+
+    # Feature dropdown
     numeric_cols = ["humidity", "air_temp", "ss_temp", "zon_winds", "mer_winds"]
     feature = st.selectbox(
         "Select variable to visualize:",
-        options=numeric_cols,
+        numeric_cols,
         index=numeric_cols.index("ss_temp"),
     )
 
-    # Ensure dates and weights
+    df = st.session_state["df"].copy()
     df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
-    year_counts = df["year"].value_counts()
-    df["weight"] = df["year"].map(lambda y: 1 / year_counts[y])
 
-    # ENSO scatter plot
+    # Scatter colored by ENSO
     anom_abs = max(abs(df["ANOM"].min()), abs(df["ANOM"].max()))
     fig_scatter = px.scatter(
         df,
@@ -253,6 +257,7 @@ elif choice == "Temporal Coverage":
         color="ANOM",
         color_continuous_scale="RdBu_r",
         opacity=0.5,
+        labels={feature: feature.replace("_", " ").title(), "ANOM": "ENSO Index"},
         title=f"{feature.replace('_', ' ').title()} Over Time (ENSO-Colored)",
     )
     fig_scatter.update_layout(
@@ -261,23 +266,23 @@ elif choice == "Temporal Coverage":
             cmax=anom_abs,
             cmid=0,
             colorscale="RdBu_r",
-            colorbar=dict(title="ENSO Index (ANOM)"),
-        ),
-        template="plotly_white",
-        margin=dict(l=50, r=20, t=60, b=60),
+            colorbar=dict(title="ENSO Index"),
+        )
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # Daily averages & ENSO shading
+    # ENSO-shaded line plot
+    st.subheader(f"Daily {feature.replace('_', ' ').title()} with ENSO Shading")
+    show_shading = st.checkbox("Show ENSO shading", value=True)
+
     df_daily = df.groupby("date")[numeric_cols + ["ANOM"]].mean().reset_index()
-    show_shading = st.checkbox("Show ENSO shading on line plot", value=True)
-    el_nino_thresh = 1.0
-    la_nina_thresh = -1.0
+    el_thresh, la_thresh = 1.0, -1.0
     df_daily["event"] = np.where(
-        df_daily["ANOM"] > el_nino_thresh,
-        "El Nino",
-        np.where(df_daily["ANOM"] < la_nina_thresh, "La Nina", None),
+        df_daily["ANOM"] > el_thresh,
+        "El Niño",
+        np.where(df_daily["ANOM"] < la_thresh, "La Niña", None),
     )
+
     shading_periods = []
     current_event = None
     start_date = None
@@ -307,7 +312,7 @@ elif choice == "Temporal Coverage":
                 continue
             color = (
                 "rgba(255,0,0,0.1)"
-                if period["event"] == "El Nino"
+                if period["event"] == "El Niño"
                 else "rgba(0,0,255,0.1)"
             )
             fig_line.add_vrect(
@@ -328,35 +333,15 @@ elif choice == "Temporal Coverage":
             name=f"Daily {feature}",
         )
     )
-    fig_line.update_xaxes(
-        dtick="M12",
-        tickformat="%Y",
-        tickangle=-45,
-        showgrid=True,
-        gridcolor="lightgrey",
-    )
     fig_line.update_layout(
-        title=dict(
-            text=f"Daily {feature.replace('_', ' ').title()}"
-            + (" with ENSO Event Shading" if show_shading else ""),
-            x=0.5,
-            xanchor="center",
-        ),
-        xaxis_title="Date",
-        yaxis_title=feature.replace("_", " ").title(),
+        title=f"Daily {feature.replace('_', ' ').title()}"
+        + (" with ENSO Shading" if show_shading else ""),
         template="plotly_white",
-        legend=dict(
-            x=0.01,
-            y=0.99,
-            bgcolor="rgba(255,255,255,0.7)",
-            bordercolor="lightgrey",
-            borderwidth=1,
-        ),
-        margin=dict(l=50, r=20, t=60, b=60),
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
-    # Monthly violin plot
+    # Monthly violin
+    st.subheader("Monthly Distribution")
     df["month_cat"] = pd.Categorical(df["month"], categories=range(1, 13), ordered=True)
     month_labels = [
         "Jan",
@@ -408,24 +393,27 @@ elif choice == "Temporal Coverage":
     ax.set_xticklabels(month_labels)
     sns.despine()
     ax.grid(axis="y", linestyle="--", alpha=0.5)
-    plt.tight_layout()
     st.pyplot(fig)
 
+# ----------------------------
+# Tab 4: Visualization 2 - Correlation and Binned Analysis
+# ----------------------------
+elif choice == "Visualization 2":
+    st.title("🌐 Correlation and SST-AirTemp Relationships")
+    st.markdown("""
+Explore **how ENSO events influence variable relationships**:
+- Correlation heatmap
+- Scatter plots and regression
+- Pairwise relationships
+- Binned line plots
+""")
 
-# -----------------------------
-# Tab 4: Correlation & Scatter
-# -----------------------------
-elif choice == "Correlation study":
-    st.header("Correlation Study & Interactive Scatterplots")
-
-    # --- 1️⃣ Correlation Heatmap ---
-    st.subheader("Correlation Heatmap")
+    # Correlation heatmap
     selected_features = ["zon_winds", "mer_winds", "humidity", "air_temp", "ss_temp"]
     subset_df = df[selected_features].apply(pd.to_numeric, errors="coerce").dropna()
     corr_matrix = subset_df.corr().values
     mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
-    masked_corr = np.where(mask, None, corr_matrix)
-    masked_corr = masked_corr[::-1]  # lower triangle layout
+    masked_corr = np.where(mask, None, corr_matrix)[::-1]
 
     fig_corr = go.Figure(
         data=go.Heatmap(
@@ -437,11 +425,8 @@ elif choice == "Correlation study":
             zmax=1,
             colorbar=dict(title="Correlation"),
             hoverongaps=False,
-            showscale=True,
         )
     )
-
-    # Add annotations
     for i, row in enumerate(masked_corr):
         for j, val in enumerate(row):
             if val is not None:
@@ -452,15 +437,12 @@ elif choice == "Correlation study":
                     showarrow=False,
                     font=dict(color="black"),
                 )
-
     fig_corr.update_layout(title="Correlation Heatmap", xaxis=dict(tickangle=-45))
     st.plotly_chart(fig_corr, use_container_width=True)
 
-    # --- 2️⃣ Interactive Scatterplot with Regression ---
-    st.subheader("Air Temp vs Sea Surface Temp (Interactive)")
+    # Scatter with regression
     soft_blue = "#4a7c9b"
-
-    fig_scatter = px.scatter(
+    fig_scatter2 = px.scatter(
         df,
         x="air_temp",
         y="ss_temp",
@@ -472,21 +454,16 @@ elif choice == "Correlation study":
             "ss_temp": "Sea Surface Temperature (°C)",
         },
         title="Air Temperature vs Sea Surface Temperature",
-        hover_data=df.columns,
     )
-    fig_scatter.update_traces(
+    fig_scatter2.update_traces(
         marker=dict(size=5, color=soft_blue, line=dict(width=0.5, color="#2f4f5f"))
     )
-    fig_scatter.update_layout(
-        title=dict(font=dict(size=18), x=0.5),
-        xaxis=dict(title_font=dict(size=14), gridcolor="lightgray"),
-        yaxis=dict(title_font=dict(size=14), gridcolor="lightgray"),
-        plot_bgcolor="white",
+    fig_scatter2.update_layout(
+        title=dict(font=dict(size=18), x=0.5), plot_bgcolor="white"
     )
-    st.plotly_chart(fig_scatter, use_container_width=True)
+    st.plotly_chart(fig_scatter2, use_container_width=True)
 
-    # --- 3️⃣ Scatter Matrix (Pairplot) ---
-    st.subheader("Pairwise Relationships")
+    # Scatter matrix
     fig_matrix = px.scatter_matrix(
         df[selected_features],
         dimensions=selected_features,
@@ -499,16 +476,14 @@ elif choice == "Correlation study":
     fig_matrix.update_layout(height=800, width=800)
     st.plotly_chart(fig_matrix, use_container_width=True)
 
-    # --- 4️⃣ Binned Line Plot: Avg SST per Air Temp Bin by Month ---
-    st.subheader("Average SST per Air Temperature Bin by Month")
+    # Binned line plot
     df["air_temp_bin"] = pd.cut(df["air_temp"], bins=20)
     avg_sst = (
         df.groupby(["air_temp_bin", "month"])["ss_temp"]
         .mean()
         .reset_index(name="avg_ss_temp")
     )
-
-    month_labels = {
+    month_labels_map = {
         1: "Jan",
         2: "Feb",
         3: "Mar",
@@ -522,27 +497,13 @@ elif choice == "Correlation study":
         11: "Nov",
         12: "Dec",
     }
-    avg_sst["month_name"] = avg_sst["month"].map(month_labels)
-    month_order = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ]
+    avg_sst["month_name"] = avg_sst["month"].map(month_labels_map)
     avg_sst["month_name"] = pd.Categorical(
-        avg_sst["month_name"], categories=month_order, ordered=True
+        avg_sst["month_name"], categories=list(month_labels_map.values()), ordered=True
     )
     avg_sst["air_temp_bin_str"] = avg_sst["air_temp_bin"].astype(str)
 
-    fig_line = px.line(
+    fig_line2 = px.line(
         avg_sst,
         x="air_temp_bin_str",
         y="avg_ss_temp",
@@ -555,5 +516,5 @@ elif choice == "Correlation study":
         },
         title="Average SST per Air Temperature Bin Colored by Month",
     )
-    fig_line.update_layout(title_x=0.5, xaxis_tickangle=-45, plot_bgcolor="white")
-    st.plotly_chart(fig_line, use_container_width=True)
+    fig_line2.update_layout(title_x=0.5, xaxis_tickangle=-45, plot_bgcolor="white")
+    st.plotly_chart(fig_line2, use_container_width=True)
