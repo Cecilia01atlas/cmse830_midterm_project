@@ -46,7 +46,7 @@ menu = [
     "Overview",
     "Missingness",
     "Temporal Coverage",
-    "Visualization 2",
+    "Correlation study",
     "Visualization 3",
 ]
 choice = st.sidebar.radio("Menu", menu)
@@ -410,3 +410,150 @@ elif choice == "Temporal Coverage":
     ax.grid(axis="y", linestyle="--", alpha=0.5)
     plt.tight_layout()
     st.pyplot(fig)
+
+
+# -----------------------------
+# Tab 4: Correlation & Scatter
+# -----------------------------
+elif choice == "Correlation study":
+    st.header("Correlation Study & Interactive Scatterplots")
+
+    # --- 1️⃣ Correlation Heatmap ---
+    st.subheader("Correlation Heatmap")
+    selected_features = ["zon_winds", "mer_winds", "humidity", "air_temp", "ss_temp"]
+    subset_df = df[selected_features].apply(pd.to_numeric, errors="coerce").dropna()
+    corr_matrix = subset_df.corr().values
+    mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
+    masked_corr = np.where(mask, None, corr_matrix)
+    masked_corr = masked_corr[::-1]  # lower triangle layout
+
+    fig_corr = go.Figure(
+        data=go.Heatmap(
+            z=masked_corr,
+            x=selected_features,
+            y=selected_features[::-1],
+            colorscale="RdBu_r",
+            zmin=-1,
+            zmax=1,
+            colorbar=dict(title="Correlation"),
+            hoverongaps=False,
+            showscale=True,
+        )
+    )
+
+    # Add annotations
+    for i, row in enumerate(masked_corr):
+        for j, val in enumerate(row):
+            if val is not None:
+                fig_corr.add_annotation(
+                    x=selected_features[j],
+                    y=selected_features[::-1][i],
+                    text=f"{val:.2f}",
+                    showarrow=False,
+                    font=dict(color="black"),
+                )
+
+    fig_corr.update_layout(title="Correlation Heatmap", xaxis=dict(tickangle=-45))
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+    # --- 2️⃣ Interactive Scatterplot with Regression ---
+    st.subheader("Air Temp vs Sea Surface Temp (Interactive)")
+    soft_blue = "#4a7c9b"
+
+    fig_scatter = px.scatter(
+        df,
+        x="air_temp",
+        y="ss_temp",
+        opacity=0.4,
+        trendline="ols",
+        trendline_color_override="red",
+        labels={
+            "air_temp": "Air Temperature (°C)",
+            "ss_temp": "Sea Surface Temperature (°C)",
+        },
+        title="Air Temperature vs Sea Surface Temperature",
+        hover_data=df.columns,
+    )
+    fig_scatter.update_traces(
+        marker=dict(size=5, color=soft_blue, line=dict(width=0.5, color="#2f4f5f"))
+    )
+    fig_scatter.update_layout(
+        title=dict(font=dict(size=18), x=0.5),
+        xaxis=dict(title_font=dict(size=14), gridcolor="lightgray"),
+        yaxis=dict(title_font=dict(size=14), gridcolor="lightgray"),
+        plot_bgcolor="white",
+    )
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
+    # --- 3️⃣ Scatter Matrix (Pairplot) ---
+    st.subheader("Pairwise Relationships")
+    fig_matrix = px.scatter_matrix(
+        df[selected_features],
+        dimensions=selected_features,
+        color="air_temp",
+        labels={col: col.replace("_", " ").title() for col in selected_features},
+        title="Pairwise Relationships between SST and Other Features",
+        opacity=0.5,
+    )
+    fig_matrix.update_traces(diagonal_visible=True)
+    fig_matrix.update_layout(height=800, width=800)
+    st.plotly_chart(fig_matrix, use_container_width=True)
+
+    # --- 4️⃣ Binned Line Plot: Avg SST per Air Temp Bin by Month ---
+    st.subheader("Average SST per Air Temperature Bin by Month")
+    df["air_temp_bin"] = pd.cut(df["air_temp"], bins=20)
+    avg_sst = (
+        df.groupby(["air_temp_bin", "month"])["ss_temp"]
+        .mean()
+        .reset_index(name="avg_ss_temp")
+    )
+
+    month_labels = {
+        1: "Jan",
+        2: "Feb",
+        3: "Mar",
+        4: "Apr",
+        5: "May",
+        6: "Jun",
+        7: "Jul",
+        8: "Aug",
+        9: "Sep",
+        10: "Oct",
+        11: "Nov",
+        12: "Dec",
+    }
+    avg_sst["month_name"] = avg_sst["month"].map(month_labels)
+    month_order = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
+    avg_sst["month_name"] = pd.Categorical(
+        avg_sst["month_name"], categories=month_order, ordered=True
+    )
+    avg_sst["air_temp_bin_str"] = avg_sst["air_temp_bin"].astype(str)
+
+    fig_line = px.line(
+        avg_sst,
+        x="air_temp_bin_str",
+        y="avg_ss_temp",
+        markers=True,
+        color="month_name",
+        labels={
+            "air_temp_bin_str": "Air Temperature Bin",
+            "avg_ss_temp": "Average SST (°C)",
+            "month_name": "Month",
+        },
+        title="Average SST per Air Temperature Bin Colored by Month",
+    )
+    fig_line.update_layout(title_x=0.5, xaxis_tickangle=-45, plot_bgcolor="white")
+    st.plotly_chart(fig_line, use_container_width=True)
