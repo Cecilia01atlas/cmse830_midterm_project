@@ -4,10 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objs as go
-import plotly.figure_factory as ff
-from ucimlrepo import fetch_ucirepo
-import statsmodels.api as sm
 import seaborn as sns
+from ucimlrepo import fetch_ucirepo
+from sklearn.linear_model import LinearRegression
 
 
 # ---------------------------------------------------
@@ -15,31 +14,32 @@ import seaborn as sns
 # ---------------------------------------------------
 @st.cache_data
 def load_data():
-    # Fetch dataset
     el_nino = fetch_ucirepo(id=122)
     X = el_nino.data.features
     Y = el_nino.data.targets
     df = pd.concat([X, Y], axis=1)
-
-    # Fix year and create date column (same as your working code)
     df["year"] = df["year"] + 1900
     df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
     df = df.sort_values("date").reset_index(drop=True)
-
-    # --- Merge second dataset safely ---
-    enso = pd.read_csv("data_index.csv")
-    # Only merge year and month; drop duplicates in enso if needed
-    enso = enso.drop_duplicates(subset=["year", "month"])
+    enso = pd.read_csv("data_index.csv").drop_duplicates(subset=["year", "month"])
     df = df.merge(enso, on=["year", "month"], how="left")
-
-    return df, el_nino  # keep el_nino for column info if needed
+    return df, el_nino
 
 
 # Load dataset
 df, el_nino = load_data()
 
-if "df" in st.session_state:
-    df = st.session_state["df"].copy()
+# -----------------------------
+# Session state initialization
+# -----------------------------
+if "df" not in st.session_state:
+    st.session_state["df"] = df.copy()
+
+if "humidity_original" not in st.session_state:
+    st.session_state["humidity_original"] = df["humidity"].copy()
+
+# Use df from session state
+df = st.session_state["df"]
 
 # --- Sidebar Menu ---
 menu = [
@@ -51,13 +51,13 @@ menu = [
 ]
 choice = st.sidebar.radio("Menu", menu)
 
-# --- Tab 1: Overview ---
+# -----------------------------
+# Tab 1: Overview
+# -----------------------------
 if choice == "Overview":
     st.title("Dataset Overview")
 
-    # 1️⃣ Column information
     st.subheader("Column Information")
-
     col_info = pd.DataFrame(
         {
             "Column": df.columns,
@@ -71,16 +71,13 @@ if choice == "Overview":
     )
     st.dataframe(col_info)
 
-    # 2️⃣ First 15 rows
     st.subheader("First 15 Rows of the Dataset")
     st.dataframe(df.head(15))
 
-    # 3️⃣ Summary statistics (exclude year, month, day, date)
     st.subheader("Summary Statistics")
     numeric_df = df.drop(columns=["year", "month", "day", "date"], errors="ignore")
     st.write(numeric_df.describe())
 
-    # 4️⃣ Temporal coverage over time (year-month)
     st.subheader("Temporal Coverage Over Time (Year-Month)")
     df["year_month"] = (
         df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
@@ -93,12 +90,10 @@ if choice == "Overview":
     plt.xticks(rotation=90)
     st.pyplot(fig)
 
-    # 5️⃣ Duplicates
     st.subheader("Duplicates in Dataset")
     duplicates = df.duplicated().sum()
     st.write(f"Number of duplicate rows: {duplicates}")
 
-    # 6️⃣ Outlier detection
     st.subheader("Outlier Detection (Z-score > 3)")
     numeric_cols = [
         "zon_winds",
@@ -117,49 +112,42 @@ if choice == "Overview":
             outlier_dict[col] = outliers
     st.write(pd.DataFrame.from_dict(outlier_dict, orient="index", columns=["Outliers"]))
 
-
-# --- Tab 2: Missingness ---
+# -----------------------------
+# Tab 2: Missingness
+# -----------------------------
 elif choice == "Missingness":
     st.title("Missingness Analysis")
 
-    # --- Use df from session_state if exists ---
-    if "df" in st.session_state:
-        df = st.session_state["df"].copy()
+    # Bar chart & table use original humidity
+    df_heatmap = df.copy()
+    df_heatmap["humidity"] = st.session_state["humidity_original"]
 
-    # --- Missing values per column ---
     st.subheader("Missing Values per Column")
-    missing_counts = df.isna().sum().sort_values(ascending=False)
+    missing_counts = df_heatmap.isna().sum().sort_values(ascending=False)
     st.bar_chart(missing_counts)
 
-    # --- Missingness summary table ---
     st.subheader("Missingness Summary Table")
     summary_table = pd.DataFrame(
         {
-            "Missing Values": df.isna().sum(),
-            "Missing %": (df.isna().mean() * 100).round(2),
+            "Missing Values": df_heatmap.isna().sum(),
+            "Missing %": (df_heatmap.isna().mean() * 100).round(2),
         }
     ).sort_values("Missing Values", ascending=False)
     st.dataframe(summary_table)
 
-    # --- Missingness heatmap ---
     st.subheader("Heatmap of Missing Values Over Time")
-    # Use original humidity if available
-    heatmap_cols = df.columns.tolist()
-    if "humidity_original" in df.columns:
-        heatmap_cols[heatmap_cols.index("humidity")] = "humidity_original"
-    nan_mask = df[heatmap_cols].isna()
+    nan_mask = df_heatmap.isna()
     nan_array = nan_mask.astype(int).to_numpy()
-
     fig, ax = plt.subplots(figsize=(24, 12))
     im = ax.imshow(nan_array.T, interpolation="nearest", aspect="auto", cmap="viridis")
     ax.set_ylabel("Features")
     ax.set_title("Missing Values Heatmap (1 = Missing, 0 = Present)")
-    ax.set_yticks(range(len(df[heatmap_cols].columns)))
-    ax.set_yticklabels(df[heatmap_cols].columns)
-    n_rows = len(df)
+    ax.set_yticks(range(len(df_heatmap.columns)))
+    ax.set_yticklabels(df_heatmap.columns)
+    n_rows = len(df_heatmap)
     n_ticks = min(15, n_rows)
     tick_positions = np.linspace(0, n_rows - 1, n_ticks).astype(int)
-    tick_labels = df.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
+    tick_labels = df_heatmap.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
     ax.set_xticks(tick_positions)
     ax.set_xticklabels(tick_labels, rotation=45, ha="right")
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
@@ -167,28 +155,15 @@ elif choice == "Missingness":
     plt.tight_layout()
     st.pyplot(fig)
 
-    # --- Humidity Imputation ---
+    # Humidity imputation
     st.subheader("Humidity Imputation")
     st.markdown("""
-    Missing humidity values are imputed using a **linear regression** model with 
-    air temperature and sea surface temperature as predictors. 
-    Stochastic noise is added to mimic natural variability.
+        Missing humidity values are imputed using a **linear regression** model with 
+        air temperature and sea surface temperature as predictors. 
+        Stochastic noise is added to mimic natural variability.
     """)
 
-    # --- Run imputation if button clicked or if already done ---
-    run_imputation = st.button("Run Humidity Imputation")
-    already_imputed = "humidity_original" in df.columns and df[
-        "humidity"
-    ].isna().sum() < st.session_state.get("original_missing", np.inf)
-
-    if run_imputation or already_imputed:
-        from sklearn.linear_model import LinearRegression
-
-        # Preserve original humidity for reference
-        if "humidity_original" not in df.columns:
-            df["humidity_original"] = df["humidity"].copy()
-            st.session_state["original_missing"] = df["humidity"].isna().sum()
-
+    if st.button("Run Humidity Imputation"):
         feature_cols = ["air_temp", "ss_temp"]
         target_col = "humidity"
 
@@ -199,11 +174,10 @@ elif choice == "Missingness":
         threshold = 0.5
         years_to_impute = missing_per_year[missing_per_year > threshold].index
 
-        # Training data
+        # Train model
         mask_train = df[feature_cols].notna().all(axis=1) & df[target_col].notna()
         X_train = df.loc[mask_train, feature_cols]
         y_train = df.loc[mask_train, target_col]
-
         model = LinearRegression()
         model.fit(X_train, y_train)
         residual_std = np.std(y_train - model.predict(X_train))
@@ -214,27 +188,22 @@ elif choice == "Missingness":
             & df[target_col].isna()
             & df["year"].isin(years_to_impute)
         )
+        X_missing = df.loc[mask_impute, feature_cols]
 
-        if mask_impute.sum() > 0:
-            X_missing = df.loc[mask_impute, feature_cols]
-            n_simulations = 100
-            stochastic_predictions = [
-                model.predict(X_missing)
-                + np.random.normal(0, residual_std, size=X_missing.shape[0])
-                for _ in range(n_simulations)
-            ]
-            y_imputed = np.mean(stochastic_predictions, axis=0)
-            df.loc[mask_impute, target_col] = y_imputed
-            st.success(f"Imputed {mask_impute.sum()} missing humidity values ✅")
-        else:
-            st.info("No missing humidity values to impute.")
+        # Stochastic predictions
+        n_simulations = 100
+        stochastic_predictions = []
+        for _ in range(n_simulations):
+            noise = np.random.normal(0, residual_std, size=X_missing.shape[0])
+            stochastic_predictions.append(model.predict(X_missing) + noise)
+        y_imputed = np.mean(stochastic_predictions, axis=0)
 
-        # Save back to session_state
+        # Apply imputation
+        df.loc[mask_impute, target_col] = y_imputed
         st.session_state["df"] = df.copy()
 
-        # Plot before vs after
+        # Plot before vs imputed
         fig, ax = plt.subplots(figsize=(14, 5))
-        imputed_mask = df["humidity"].notna() & df["humidity_original"].isna() == False
         ax.scatter(
             df.loc[mask_impute, "date"],
             df.loc[mask_impute, target_col],
@@ -244,7 +213,7 @@ elif choice == "Missingness":
         )
         ax.plot(
             df["date"],
-            df["humidity_original"],
+            st.session_state["humidity_original"],
             label="Original Humidity",
             alpha=0.7,
         )
@@ -254,28 +223,28 @@ elif choice == "Missingness":
         ax.legend()
         st.pyplot(fig)
 
+        st.success("Humidity imputation complete ✅")
         st.write("Remaining missing values per column after imputation:")
         st.write(df.isna().sum())
 
-
-# --- Tab 3: Temporal coverage ---
+# -----------------------------
+# Tab 3: Temporal Coverage
+# -----------------------------
 elif choice == "Temporal Coverage":
     st.header("📅 Temporal Coverage")
-
-    # --- Dropdown to select feature ---
     numeric_cols = ["humidity", "air_temp", "ss_temp", "zon_winds", "mer_winds"]
     feature = st.selectbox(
         "Select variable to visualize:",
         options=numeric_cols,
-        index=numeric_cols.index("ss_temp") if "ss_temp" in numeric_cols else 0,
+        index=numeric_cols.index("ss_temp"),
     )
 
-    # --- Prepare dates and weights ---
+    # Ensure dates and weights
     df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
     year_counts = df["year"].value_counts()
     df["weight"] = df["year"].map(lambda y: 1 / year_counts[y])
 
-    # --- ENSO Scatter Plot ---
+    # ENSO scatter plot
     anom_abs = max(abs(df["ANOM"].min()), abs(df["ANOM"].max()))
     fig_scatter = px.scatter(
         df,
@@ -283,13 +252,8 @@ elif choice == "Temporal Coverage":
         y=feature,
         color="ANOM",
         color_continuous_scale="RdBu_r",
-        title=f"{feature.replace('_', ' ').title()} Over Time (ENSO-Colored)",
-        labels={
-            "date": "Date",
-            feature: feature.replace("_", " ").title(),
-            "ANOM": "ENSO Index",
-        },
         opacity=0.5,
+        title=f"{feature.replace('_', ' ').title()} Over Time (ENSO-Colored)",
     )
     fig_scatter.update_layout(
         coloraxis=dict(
@@ -304,13 +268,9 @@ elif choice == "Temporal Coverage":
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # --- Daily averages ---
+    # Daily averages & ENSO shading
     df_daily = df.groupby("date")[numeric_cols + ["ANOM"]].mean().reset_index()
-
-    # --- ENSO shading toggle ---
     show_shading = st.checkbox("Show ENSO shading on line plot", value=True)
-
-    # --- Identify ENSO event periods ---
     el_nino_thresh = 1.0
     la_nina_thresh = -1.0
     df_daily["event"] = np.where(
@@ -318,7 +278,6 @@ elif choice == "Temporal Coverage":
         "El Nino",
         np.where(df_daily["ANOM"] < la_nina_thresh, "La Nina", None),
     )
-
     shading_periods = []
     current_event = None
     start_date = None
@@ -341,17 +300,15 @@ elif choice == "Temporal Coverage":
             }
         )
 
-    # --- ENSO-shaded Line Plot ---
     fig_line = go.Figure()
-
     if show_shading:
         for period in shading_periods:
             if period["event"] is None:
                 continue
             color = (
-                "rgba(255, 0, 0, 0.1)"
+                "rgba(255,0,0,0.1)"
                 if period["event"] == "El Nino"
-                else "rgba(0, 0, 255, 0.1)"
+                else "rgba(0,0,255,0.1)"
             )
             fig_line.add_vrect(
                 x0=period["start"],
@@ -371,7 +328,6 @@ elif choice == "Temporal Coverage":
             name=f"Daily {feature}",
         )
     )
-
     fig_line.update_xaxes(
         dtick="M12",
         tickformat="%Y",
@@ -379,7 +335,6 @@ elif choice == "Temporal Coverage":
         showgrid=True,
         gridcolor="lightgrey",
     )
-
     fig_line.update_layout(
         title=dict(
             text=f"Daily {feature.replace('_', ' ').title()}"
@@ -401,7 +356,7 @@ elif choice == "Temporal Coverage":
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
-    # --- Monthly Violin Plot ---
+    # Monthly violin plot
     df["month_cat"] = pd.Categorical(df["month"], categories=range(1, 13), ordered=True)
     month_labels = [
         "Jan",
@@ -431,7 +386,6 @@ elif choice == "Temporal Coverage":
         "#6699ff",
         "#3366cc",
     ]
-
     fig, ax = plt.subplots(figsize=(14, 6))
     sns.violinplot(
         x="month_cat",
