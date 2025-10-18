@@ -149,12 +149,9 @@ Understanding **which variables and time periods are missing** is critical befor
 """)
 
     # --- Missingness table ---
-    st.subheader("Missing Values per Column")
-    st.markdown(
-        "The  below below shows ta summary of missing entries for each feature."
-    )
-
     st.subheader("Missingness Summary Table")
+    st.markdown("The table below shows a summary of missing entries for each feature.")
+
     summary_table = pd.DataFrame(
         {
             "Missing Values": df.isna().sum(),
@@ -185,7 +182,7 @@ Understanding **which variables and time periods are missing** is critical befor
     nan_array = nan_mask.isna().astype(int).to_numpy()
 
     # Plot heatmap
-    fig, ax = plt.subplots(figsize=(24, 12))
+    fig, ax = plt.subplots(figsize=(30, 18))
 
     # Use a high-contrast colormap (0 = white, 1 = dark)
     im = ax.imshow(
@@ -277,22 +274,40 @@ Stochastic noise is added to mimic natural variability.
 # Tab 3: Temporal Coverage
 # ================================================
 elif choice == "Temporal Coverage":
-    st.header("📅 Temporal Coverage")
+    st.header("🌊 Temporal Coverage & ENSO Influence")
     st.markdown("""
-This tab shows how variables evolve over time and highlights periods affected by **El Niño and La Niña events**.
-""")
+The **Temporal Coverage** tab provides a deeper look at how key climate variables evolve over time.  
+This is where we highlight the influence of **ENSO events (El Niño & La Niña)** on variables such as
+sea surface temperature, air temperature, humidity, and winds.
+
+- **El Niño** (red shading): Typically leads to **warmer sea surface temperatures** in the central and eastern Pacific.  
+- **La Niña** (blue shading): Usually associated with **cooler sea surface temperatures**.  
+
+Use the dropdown below to select which variable you'd like to explore over time.
+    """)
+
+    # Feature dropdown
     numeric_cols = ["humidity", "air_temp", "ss_temp", "zon_winds", "mer_winds"]
     feature = st.selectbox(
         "Select variable to visualize:",
-        options=numeric_cols,
-        index=numeric_cols.index("ss_temp") if "ss_temp" in numeric_cols else 0,
+        numeric_cols,
+        index=numeric_cols.index("ss_temp"),
     )
 
+    df = st.session_state["df"].copy()
     df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
-    year_counts = df["year"].value_counts()
-    df["weight"] = df["year"].map(lambda y: 1 / year_counts[y])
 
-    # ENSO-colored scatter
+    # ================= Scatter plot colored by ENSO =================
+    st.subheader(
+        f"📅 {feature.replace('_', ' ').title()} Over Time (ENSO-Colored Scatter)"
+    )
+    st.markdown("""
+    Each point represents a daily observation. The color indicates the **ENSO index (ANOM)**:  
+    - 🔴 **Positive values** → El Niño conditions (warmer anomalies)  
+    - 🔵 **Negative values** → La Niña conditions (cooler anomalies)  
+    - ⚪ **Near zero** → Neutral conditions
+    """)
+
     anom_abs = max(abs(df["ANOM"].min()), abs(df["ANOM"].max()))
     fig_scatter = px.scatter(
         df,
@@ -300,25 +315,161 @@ This tab shows how variables evolve over time and highlights periods affected by
         y=feature,
         color="ANOM",
         color_continuous_scale="RdBu_r",
-        opacity=0.5,
+        opacity=0.6,
+        labels={feature: feature.replace("_", " ").title(), "ANOM": "ENSO Index"},
         title=f"{feature.replace('_', ' ').title()} Over Time (ENSO-Colored)",
-        labels={
-            "date": "Date",
-            feature: feature.replace("_", " ").title(),
-            "ANOM": "ENSO Index",
-        },
     )
     fig_scatter.update_layout(
         coloraxis=dict(
             cmin=-anom_abs,
             cmax=anom_abs,
             cmid=0,
-            colorbar=dict(title="ENSO Index (ANOM)"),
+            colorscale="RdBu_r",
+            colorbar=dict(title="ENSO Index"),
         ),
         template="plotly_white",
-        margin=dict(l=50, r=20, t=60, b=60),
+        title_x=0.5,
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
+
+    # ================= ENSO-shaded line plot =================
+    st.subheader(
+        f"📈 Daily {feature.replace('_', ' ').title()} with ENSO Event Shading"
+    )
+    st.markdown("""
+    The line plot below shows the smoothed daily values.  
+    Shaded regions highlight **ENSO events** over time, illustrating how they align with 
+    changes in the selected variable.
+    """)
+
+    show_shading = st.checkbox("Show ENSO shading", value=True)
+
+    df_daily = df.groupby("date")[numeric_cols + ["ANOM"]].mean().reset_index()
+    el_thresh, la_thresh = 1.0, -1.0
+    df_daily["event"] = np.where(
+        df_daily["ANOM"] > el_thresh,
+        "El Niño",
+        np.where(df_daily["ANOM"] < la_thresh, "La Niña", None),
+    )
+
+    shading_periods = []
+    current_event = None
+    start_date = None
+    for _, row in df_daily.iterrows():
+        event = row["event"]
+        date = row["date"]
+        if event != current_event:
+            if current_event is not None:
+                shading_periods.append(
+                    {"event": current_event, "start": start_date, "end": date}
+                )
+            current_event = event
+            start_date = date
+    if current_event is not None:
+        shading_periods.append(
+            {
+                "event": current_event,
+                "start": start_date,
+                "end": df_daily["date"].iloc[-1],
+            }
+        )
+
+    fig_line = go.Figure()
+    if show_shading:
+        for period in shading_periods:
+            if period["event"] is None:
+                continue
+            color = (
+                "rgba(255, 0, 0, 0.15)"
+                if period["event"] == "El Niño"
+                else "rgba(0, 0, 255, 0.15)"
+            )
+            fig_line.add_vrect(
+                x0=period["start"],
+                x1=period["end"],
+                fillcolor=color,
+                opacity=0.3,
+                layer="below",
+                line_width=0,
+            )
+
+    fig_line.add_trace(
+        go.Scatter(
+            x=df_daily["date"],
+            y=df_daily[feature],
+            mode="lines",
+            line=dict(color="royalblue", width=1.5),
+            name=f"Daily {feature}",
+        )
+    )
+    fig_line.update_layout(
+        title=f"Daily {feature.replace('_', ' ').title()}"
+        + (" with ENSO Shading" if show_shading else ""),
+        template="plotly_white",
+        title_x=0.5,
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
+
+    # ================= Monthly violin plot =================
+    st.subheader(f"📊 Monthly Distribution of {feature.replace('_', ' ').title()}")
+    st.markdown("""
+    The violin plot below shows the **seasonal distribution** of the selected variable, aggregated over all years.
+    It highlights the **annual cycle** and seasonal patterns that interact with ENSO dynamics.
+    """)
+
+    df["month_cat"] = pd.Categorical(df["month"], categories=range(1, 13), ordered=True)
+    month_labels = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
+    seasonal_colors = [
+        "#003366",
+        "#3366cc",
+        "#6699ff",
+        "#99ccff",
+        "#ffcc99",
+        "#ff6666",
+        "#cc0033",
+        "#ff6666",
+        "#ffcc99",
+        "#99ccff",
+        "#6699ff",
+        "#3366cc",
+    ]
+
+    fig, ax = plt.subplots(figsize=(16, 7))
+    sns.violinplot(
+        x="month_cat",
+        y=feature,
+        data=df,
+        inner="box",
+        cut=0,
+        linewidth=1.2,
+        palette=seasonal_colors,
+        ax=ax,
+    )
+    ax.set_title(
+        f"Distribution of {feature.replace('_', ' ').title()} by Month (All Years)",
+        fontsize=16,
+        pad=15,
+    )
+    ax.set_xlabel("Month", fontsize=13)
+    ax.set_ylabel(feature.replace("_", " ").title(), fontsize=13)
+    ax.set_xticks(range(12))
+    ax.set_xticklabels(month_labels, fontsize=11)
+    sns.despine()
+    ax.grid(axis="y", linestyle="--", alpha=0.5)
+    st.pyplot(fig)
 
 
 # ================================================
