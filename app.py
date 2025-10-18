@@ -53,7 +53,7 @@ choice = st.sidebar.radio("Menu", menu)
 # Tab 1: Overview
 # ================================================
 if choice == "Overview":
-    st.title("🌍 Dataset Overview")
+    st.title("🌊 Dataset Overview")
     st.markdown("""
 This dataset contains measurements of **ocean-atmosphere variables** over time, including:
 - Sea Surface Temperature (SST)
@@ -61,7 +61,9 @@ This dataset contains measurements of **ocean-atmosphere variables** over time, 
 - Humidity
 - Zonal and Meridional Winds
 
-The goal is to understand how these variables **change over time**, and how **El Niño and La Niña events** influence them.
+Before diving into the analysis of sea–air interactions and El Niño/La Niña patterns, 
+it's important to get a clear picture of the dataset itself — its structure, size, 
+and basic characteristics. This tab provides a quick overview and initial checks.
 
 Below, you can explore:
 1. Column information and data types.
@@ -139,6 +141,7 @@ Understanding these outliers helps ensure robust analyses.
             outlier_dict[col] = outliers
     st.write(pd.DataFrame.from_dict(outlier_dict, orient="index", columns=["Outliers"]))
 
+
 # ================================================
 # Tab 2: Missingness
 # ================================================
@@ -149,15 +152,12 @@ Some variables in the dataset have **missing measurements**, which is common in 
 Understanding **which variables and time periods are missing** is critical before performing imputation or trend analyses.
 """)
 
-    # --- Missing values bar ---
+    # --- Missingness table ---
     st.subheader("Missing Values per Column")
     st.markdown(
-        "The bar chart below shows the number of missing entries for each feature."
+        "The  below below shows ta summary of missing entries for each feature."
     )
-    missing_counts = df.isna().sum().sort_values(ascending=False)
-    st.bar_chart(missing_counts)
 
-    # --- Missingness table ---
     st.subheader("Missingness Summary Table")
     summary_table = pd.DataFrame(
         {
@@ -168,34 +168,38 @@ Understanding **which variables and time periods are missing** is critical befor
     st.dataframe(summary_table)
 
     # --- Missingness heatmap ---
-    st.subheader("Heatmap of Missing Values Over Time")
     st.markdown("""
-The heatmap shows missing values for all features across dates:
-- 1 indicates a missing value
-- 0 indicates a recorded value
+    ### Missingness Analysis
 
-For clarity, the **humidity column shows the original values before imputation**.
-""")
-    nan_mask = df.copy()
-    if "humidity_original" in df.columns:
-        nan_mask["humidity"] = df["humidity_original"]
-    nan_array = nan_mask.isna().astype(int).to_numpy()
-    fig, ax = plt.subplots(figsize=(24, 12))
-    im = ax.imshow(nan_array.T, interpolation="nearest", aspect="auto", cmap="viridis")
-    ax.set_ylabel("Features")
-    ax.set_title("Missing Values Heatmap (1 = Missing, 0 = Present)")
-    ax.set_yticks(range(len(df.columns)))
-    ax.set_yticklabels(df.columns)
-    n_rows = len(df)
-    n_ticks = min(15, n_rows)
-    tick_positions = np.linspace(0, n_rows - 1, n_ticks).astype(int)
-    tick_labels = df.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
-    ax.set_xticks(tick_positions)
-    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
-    ax.grid(True, axis="y", linestyle="--", alpha=0.5)
-    fig.colorbar(im, ax=ax, label="Missingness")
-    plt.tight_layout()
-    st.pyplot(fig)
+    Missing data can reveal patterns about how and when measurements were taken, and they influence
+    how we handle imputation. Here we explore the structure of missing values in the dataset.
+    """)
+
+    # Select columns for missingness heatmap (exclude time-related columns)
+    cols_for_heatmap = [
+        col for col in df.columns if col not in ["day", "month", "year"]
+    ]
+
+    # Plot missingness heatmap
+    plt.figure(figsize=(14, 6))  # slightly wider for clarity
+    sns.heatmap(df[cols_for_heatmap].isna(), cbar=False)
+    plt.title("Missingness Heatmap (Excluding Day/Month/Year)", fontsize=14)
+    st.pyplot(plt.gcf())
+    plt.close()
+
+    # Table of missing value counts
+    missing_table = (
+        df[cols_for_heatmap]
+        .isna()
+        .sum()
+        .reset_index()
+        .rename(columns={"index": "Variable", 0: "Missing Values"})
+    )
+    missing_table["% Missing"] = (missing_table["Missing Values"] / len(df)) * 100
+    missing_table = missing_table.sort_values(by="Missing Values", ascending=False)
+
+    st.subheader("📊 Missing Values Summary")
+    st.dataframe(missing_table, use_container_width=True)
 
     # --- Humidity Imputation ---
     st.subheader("Humidity Imputation")
@@ -252,6 +256,7 @@ Stochastic noise is added to mimic natural variability.
         st.success("Humidity imputation complete ✅")
         st.write("Remaining missing values per column after imputation:")
         st.write(df.isna().sum())
+
 
 # ================================================
 # Tab 3: Temporal Coverage
@@ -368,7 +373,8 @@ This tab explores relationships between key variables:
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # ----------------------------
+
+# ----------------------------
 # Tab 5: ENSO Summary
 # ----------------------------
 elif choice == "Summary and Conclusion":
