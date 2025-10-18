@@ -38,7 +38,13 @@ def load_data():
 df, el_nino = load_data()
 
 # --- Sidebar Menu ---
-menu = ["Overview", "Visualization 1", "Visualization 2", "Visualization 3"]
+menu = [
+    "Overview",
+    "Missingness",
+    "Visualization 1",
+    "Visualization 2",
+    "Visualization 3",
+]
 choice = st.sidebar.radio("Menu", menu)
 
 # --- Tab 1: Overview ---
