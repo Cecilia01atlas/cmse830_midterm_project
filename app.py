@@ -478,13 +478,13 @@ Use the dropdown below to select which variable you'd like to explore over time.
 elif choice == "Correlation study":
     st.header("📊 Correlation and Feature Relationships")
     st.markdown("""
-Understanding how **atmospheric and oceanic variables interact** is crucial to explaining the ENSO phenomenon.
+Understanding how **atmospheric and oceanic variables interact** is crucial to explaining ENSO.
 
-- 🌡 **Air and Sea Surface Temperature** are tightly linked — warming of the Pacific surface during El Niño affects atmospheric patterns globally.  
-- 💨 **Zonal and meridional winds** drive surface currents and influence upwelling.  
-- 💧 **Humidity** connects ocean evaporation with atmospheric moisture content.
+- 🌡 **Air ↔ Sea Surface Temperature**: warming of the Pacific surface during El Niño affects atmospheric patterns.  
+- 💨 **Winds**: zonal (east–west) and meridional (north–south) winds drive currents and influence upwelling.  
+- 💧 **Humidity**: links evaporation from oceans with atmospheric moisture content.  
 
-This tab explores these **relationships statistically and visually**, helping us detect patterns consistent with ENSO dynamics.
+This tab combines **correlation statistics and scatterplots** to explore these links.
 """)
 
     df = st.session_state["df"].copy()
@@ -493,6 +493,10 @@ This tab explores these **relationships statistically and visually**, helping us
 
     # --- Correlation heatmap ---
     st.subheader("🔸 Correlation Heatmap")
+    st.markdown(
+        "The heatmap quantifies **linear correlations** (Pearson) between all variables."
+    )
+
     corr_matrix = subset_df.corr().values
     mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
     masked_corr = np.where(mask, None, corr_matrix)[::-1]
@@ -510,8 +514,7 @@ This tab explores these **relationships statistically and visually**, helping us
             showscale=True,
         )
     )
-
-    # Annotate correlation coefficients
+    # Annotate values
     for i, row in enumerate(masked_corr):
         for j, val in enumerate(row):
             if val is not None:
@@ -531,11 +534,31 @@ This tab explores these **relationships statistically and visually**, helping us
     )
     st.plotly_chart(fig_corr, use_container_width=True)
 
-    # --- Scatter with regression ---
+    # --- Pairwise scatter matrix (moved up + colored) ---
+    st.subheader("🔸 Pairwise Relationships")
+    st.markdown("""
+The scatter matrix lets us **inspect all variable pairs simultaneously**.  
+Here, points are colored by **air temperature**, which helps reveal ENSO-related structure and seasonal gradients.
+""")
+
+    fig_matrix = px.scatter_matrix(
+        df[selected_features],
+        dimensions=selected_features,
+        color="air_temp",
+        labels={col: col.replace("_", " ").title() for col in selected_features},
+        title="Pairwise Relationships between Key Variables",
+        opacity=0.5,
+        color_continuous_scale="RdBu_r",
+    )
+    fig_matrix.update_traces(diagonal_visible=True)
+    fig_matrix.update_layout(height=800, width=800)
+    st.plotly_chart(fig_matrix, use_container_width=True)
+
+    # --- Scatter with regression (moved down) ---
     st.subheader("🔸 Air Temperature vs Sea Surface Temperature")
     st.markdown("""
-A strong **linear relationship** is expected between **air temperature** and **sea surface temperature**, since warm ocean waters heat the air above them.  
-This scatter plot includes a regression line to highlight this dependency.
+Because the ocean warms the air directly above it, we expect a **tight linear relationship** between SST and air temperature.  
+This scatter plot confirms that relationship, with a regression line shown in red.
 """)
 
     fig_scatter = px.scatter(
@@ -559,26 +582,11 @@ This scatter plot includes a regression line to highlight this dependency.
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # --- Pairwise scatter matrix ---
-    st.subheader("🔸 Pairwise Relationships")
-    st.markdown("""
-This scatter matrix allows us to **visually inspect relationships between all variables simultaneously**.  
-Patterns like linear trends or clusters may indicate physical couplings or ENSO-related structures.
-""")
-    fig_matrix = px.scatter_matrix(
-        subset_df,
-        dimensions=selected_features,
-        title="Pairwise Scatter Matrix of Selected Variables",
-        opacity=0.5,
-    )
-    fig_matrix.update_traces(diagonal_visible=False)
-    fig_matrix.update_layout(height=800)
-    st.plotly_chart(fig_matrix, use_container_width=True)
-
     # --- Binned line plots ---
-    st.subheader("🔸 Binned Sea Surface Temperature by Air Temperature")
+    st.subheader("🔸 Binned SST by Air Temperature")
     st.markdown("""
-Finally, we **bin air temperatures** and calculate the **average sea surface temperature per bin** to smooth out noise and highlight trends across months.
+Here, **air temperature values are grouped into bins**, and we plot the **mean SST per bin across months**.  
+This reduces noise and highlights seasonal trends.
 """)
     df["air_temp_bin"] = pd.cut(df["air_temp"], bins=15)
     binned = df.groupby(["air_temp_bin", "month"])["ss_temp"].mean().reset_index()
