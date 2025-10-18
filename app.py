@@ -139,7 +139,13 @@ elif choice == "Missingness":
 
     # --- Missingness heatmap ---
     st.subheader("Heatmap of Missing Values Over Time")
-    nan_mask = df.isna()
+
+    # Make a copy for heatmap, replace humidity with original
+    df_heatmap = df.copy()
+    if "humidity_original" in df_heatmap.columns:
+        df_heatmap["humidity"] = df_heatmap["humidity_original"]
+
+    nan_mask = df_heatmap.isna()
     nan_array = nan_mask.astype(int).to_numpy()
 
     fig, ax = plt.subplots(figsize=(24, 12))
@@ -147,13 +153,13 @@ elif choice == "Missingness":
 
     ax.set_ylabel("Features")
     ax.set_title("Missing Values Heatmap (1 = Missing, 0 = Present)")
-    ax.set_yticks(range(len(df.columns)))
-    ax.set_yticklabels(df.columns)
+    ax.set_yticks(range(len(df_heatmap.columns)))
+    ax.set_yticklabels(df_heatmap.columns)
 
-    n_rows = len(df)
+    n_rows = len(df_heatmap)
     n_ticks = min(15, n_rows)
     tick_positions = np.linspace(0, n_rows - 1, n_ticks).astype(int)
-    tick_labels = df.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
+    tick_labels = df_heatmap.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
     ax.set_xticks(tick_positions)
     ax.set_xticklabels(tick_labels, rotation=45, ha="right")
 
@@ -163,87 +169,90 @@ elif choice == "Missingness":
     st.pyplot(fig)
 
     # --- Humidity Imputation ---
-    st.subheader("Humidity Imputation")
+st.subheader("Humidity Imputation")
 
-    st.markdown("""
-    Missing humidity values are imputed using a **linear regression** model with 
-    air temperature and sea surface temperature as predictors. 
-    Stochastic noise is added to mimic natural variability.
-    """)
+st.markdown("""
+Missing humidity values are imputed using a **linear regression** model with 
+air temperature and sea surface temperature as predictors. 
+Stochastic noise is added to mimic natural variability.
+""")
 
-    if st.button("Run Humidity Imputation"):
-        from sklearn.linear_model import LinearRegression
+# Initialize session_state for imputation if needed
+if "humidity_imputed" not in st.session_state:
+    st.session_state["humidity_imputed"] = False
 
-        # If already imputed, use session_state version
-        if "df" in st.session_state:
-            df = st.session_state["df"].copy()
+if "df" not in st.session_state:
+    st.session_state["df"] = df.copy()
 
-        # Preserve original humidity for comparison
-        if "humidity_original" not in df.columns:
-            df["humidity_original"] = df["humidity"].copy()
+# Button to run imputation
+if st.button("Run Humidity Imputation") or st.session_state["humidity_imputed"]:
+    from sklearn.linear_model import LinearRegression
 
-        feature_cols = ["air_temp", "ss_temp"]
-        target_col = "humidity"
+    df = st.session_state["df"].copy()
 
-        # --- Identify years to impute ---
-        missing_per_year = df.groupby("year")[target_col].apply(
-            lambda x: x.isna().mean()
-        )
-        threshold = 0.5
-        years_to_impute = missing_per_year[missing_per_year > threshold].index
+    # Preserve original humidity for plotting
+    if "humidity_original" not in df.columns:
+        df["humidity_original"] = df["humidity"].copy()
 
-        # --- Train model ---
-        mask_train = df[feature_cols].notna().all(axis=1) & df[target_col].notna()
-        X_train = df.loc[mask_train, feature_cols]
-        y_train = df.loc[mask_train, target_col]
+    feature_cols = ["air_temp", "ss_temp"]
+    target_col = "humidity"
 
-        model = LinearRegression()
-        model.fit(X_train, y_train)
-        residual_std = np.std(y_train - model.predict(X_train))
+    # --- Identify years to impute ---
+    missing_per_year = df.groupby("year")[target_col].apply(lambda x: x.isna().mean())
+    threshold = 0.5
+    years_to_impute = missing_per_year[missing_per_year > threshold].index
 
-        # --- Rows to impute ---
-        mask_impute = (
-            df[feature_cols].notna().all(axis=1)
-            & df[target_col].isna()
-            & df["year"].isin(years_to_impute)
-        )
-        X_missing = df.loc[mask_impute, feature_cols]
+    # --- Train model ---
+    mask_train = df[feature_cols].notna().all(axis=1) & df[target_col].notna()
+    X_train = df.loc[mask_train, feature_cols]
+    y_train = df.loc[mask_train, target_col]
 
-        # --- Stochastic predictions ---
-        n_simulations = 100
-        stochastic_predictions = []
-        for _ in range(n_simulations):
-            noise = np.random.normal(0, residual_std, size=X_missing.shape[0])
-            stochastic_predictions.append(model.predict(X_missing) + noise)
-        y_imputed = np.mean(stochastic_predictions, axis=0)
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    residual_std = np.std(y_train - model.predict(X_train))
 
-        # --- Apply imputation ---
-        df.loc[mask_impute, target_col] = y_imputed
+    # --- Rows to impute ---
+    mask_impute = (
+        df[feature_cols].notna().all(axis=1)
+        & df[target_col].isna()
+        & df["year"].isin(years_to_impute)
+    )
+    X_missing = df.loc[mask_impute, feature_cols]
 
-        # --- Save back to session_state ---
-        st.session_state["df"] = df.copy()
+    # --- Stochastic predictions ---
+    n_simulations = 100
+    stochastic_predictions = []
+    for _ in range(n_simulations):
+        noise = np.random.normal(0, residual_std, size=X_missing.shape[0])
+        stochastic_predictions.append(model.predict(X_missing) + noise)
+    y_imputed = np.mean(stochastic_predictions, axis=0)
 
-        # --- Plot before vs imputed ---
-        fig, ax = plt.subplots(figsize=(14, 5))
-        ax.scatter(
-            df.loc[mask_impute, "date"],
-            df.loc[mask_impute, target_col],
-            color="orange",
-            s=20,
-            label="Imputed",
-        )
-        ax.plot(
-            df["date"], df["humidity_original"], label="Original Humidity", alpha=0.7
-        )
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Humidity (%)")
-        ax.set_title("Humidity After Imputation")
-        ax.legend()
-        st.pyplot(fig)
+    # --- Apply imputation ---
+    df.loc[mask_impute, target_col] = y_imputed
 
-        st.success("Humidity imputation complete ✅")
-        st.write("Remaining missing values per column after imputation:")
-        st.write(df.isna().sum())
+    # --- Save to session_state ---
+    st.session_state["df"] = df.copy()
+    st.session_state["humidity_imputed"] = True
+
+    # --- Plot before vs imputed ---
+    fig, ax = plt.subplots(figsize=(14, 5))
+    ax.scatter(
+        df.loc[mask_impute, "date"],
+        df.loc[mask_impute, target_col],
+        color="orange",
+        s=20,
+        label="Imputed",
+    )
+    ax.plot(df["date"], df["humidity_original"], label="Original Humidity", alpha=0.7)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Humidity (%)")
+    ax.set_title("Humidity After Imputation")
+    ax.legend()
+    st.pyplot(fig)
+
+    st.success("Humidity imputation complete ✅")
+    st.write("Remaining missing values per column after imputation:")
+    st.write(df.isna().sum())
 
 
 # --- Tab 3: Temporal coverage ---
