@@ -635,13 +635,28 @@ This scatter plot confirms this relationship with a red regression line.
 
     num_bins = 15
     df["air_temp_bin"] = pd.qcut(df["air_temp"], q=num_bins, duplicates="drop")
-
-    # Convert bins to strings for plotting on x-axis
     df["air_temp_bin_str"] = df["air_temp_bin"].astype(str)
 
-    # Group by bin and month (keep all SST values within the bin)
+    # Map month numbers to names for the legend
+    month_labels = {
+        1: "Jan",
+        2: "Feb",
+        3: "Mar",
+        4: "Apr",
+        5: "May",
+        6: "Jun",
+        7: "Jul",
+        8: "Aug",
+        9: "Sep",
+        10: "Oct",
+        11: "Nov",
+        12: "Dec",
+    }
+    df["month_name"] = df["month"].map(month_labels)
+
+    # Group by bin and month_name
     binned = (
-        df.groupby(["air_temp_bin_str", "month"], observed=True)["ss_temp"]
+        df.groupby(["air_temp_bin_str", "month_name"], observed=True)["ss_temp"]
         .mean()
         .reset_index()
     )
@@ -650,11 +665,11 @@ This scatter plot confirms this relationship with a red regression line.
         binned,
         x="air_temp_bin_str",
         y="ss_temp",
-        color="month",
+        color="month_name",
         labels={
             "air_temp_bin_str": "Air Temperature Bin",
             "ss_temp": "Sea Surface Temperature (°C)",
-            "month": "Month",
+            "month_name": "Month",
         },
         title="SST vs Air Temperature Bin by Month",
     )
