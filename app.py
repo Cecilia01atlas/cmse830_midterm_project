@@ -113,17 +113,17 @@ if choice == "Overview":
             # Add other columns if necessary
         }
 
-    # Build dataframe
-    col_info = pd.DataFrame(
-        {
-            "Column": df.columns,
-            "Type": df.dtypes.values,
-            "Missing Values": df.isna().sum().values,
-            "Description": [
-                descriptions.get(col, "") for col in df.columns
-            ],  # empty string if no description
-        }
-    )
+        # Build dataframe
+        col_info = pd.DataFrame(
+            {
+                "Column": df.columns,
+                "Type": df.dtypes.values,
+                "Missing Values": df.isna().sum().values,
+                "Description": [
+                    descriptions.get(col, "") for col in df.columns
+                ],  # empty string if no description
+            }
+        )
 
     st.dataframe(col_info.astype(str))
 
