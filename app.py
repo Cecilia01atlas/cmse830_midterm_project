@@ -30,16 +30,13 @@ def load_data():
     return df, el_nino
 
 
-# ---------------------------------
-# 🧠 Use session state properly
-# ---------------------------------
+# ✅ Only load ONCE per session
 if "df" not in st.session_state:
-    df, el_nino = load_data()
-    st.session_state["df"] = df.copy()
-    st.session_state["el_nino"] = el_nino
-else:
-    df = st.session_state["df"].copy()
-    el_nino = st.session_state["el_nino"]
+    st.session_state["df"], st.session_state["el_nino"] = load_data()
+
+# Always work on the session version
+df = st.session_state["df"]
+el_nino = st.session_state["el_nino"]
 
 # --- Sidebar Menu ---
 menu = [
@@ -239,7 +236,7 @@ Understanding **which variables and time periods are missing** is critical befor
     st.subheader("Humidity Imputation")
     st.markdown("""
     Missing humidity values can be imputed using a **linear regression model** based on air temperature and sea surface temperature.  
-    To avoid unreliable imputations, **years with more than 50 % missing humidity data are excluded** from the imputation process.  
+    To avoid unreliable imputations, **years with less than 40 % missing humidity data are excluded** from the imputation process.  
     Additionally, stochastic noise is added to mimic natural variability.
     """)
 
@@ -257,8 +254,8 @@ Understanding **which variables and time periods are missing** is critical befor
         )
 
         # --- Choose years where missing rate is BELOW threshold (e.g., 50%) ---
-        threshold = 0.5
-        years_allowed = missing_per_year[missing_per_year <= threshold].index
+        threshold = 0.4
+        years_allowed = missing_per_year[missing_per_year >= threshold].index
 
         # --- Training data: only measured rows with predictors ---
         mask_train = df[feature_cols].notna().all(axis=1) & df[target_col].notna()
@@ -311,6 +308,8 @@ Understanding **which variables and time periods are missing** is critical befor
         )
         ax.legend()
         st.pyplot(fig)
+
+        st.session_state["df"] = df.copy()
 
         # --- Diagnostics ---
         st.success("Humidity imputation complete ✅")
