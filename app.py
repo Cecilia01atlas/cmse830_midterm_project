@@ -30,7 +30,6 @@ def load_data():
     return df, el_nino
 
 
-# ✅ Only load ONCE per session
 if "df" not in st.session_state:
     st.session_state["df"], st.session_state["el_nino"] = load_data()
 
@@ -64,10 +63,8 @@ through interactive visualizations and imputation tools.
     choice = st.radio("Navigate to:", menu)
 
 # =========================
-# 2. TAB CONTENT
+# Tab 1: Overview
 # =========================
-
-# --- Overview Tab ---
 if choice == "Overview":
     # Top-level intro goes here
     st.title("🌊 Dataset Overview")
@@ -96,7 +93,7 @@ if choice == "Overview":
     Before diving into the analysis of sea-air interactions and El Niño/La Niña patterns, it's important to get a clear picture of the dataset itself — its structure, size, and basic characteristics.
     """)
 
-    # --- Collapsible: Column info ---
+    # --- Column info ---
     with st.expander("📋 Column Information"):
         col_info = pd.DataFrame(
             {
@@ -107,12 +104,12 @@ if choice == "Overview":
         )
         st.dataframe(col_info.astype(str))
 
-    # --- Collapsible: Summary statistics ---
+    # --- Summary statistics ---
     with st.expander("📈 Summary Statistics"):
         numeric_df = df.drop(columns=["year", "month", "day", "date"], errors="ignore")
         st.write(numeric_df.describe())
 
-    # --- Collapsible: Temporal coverage ---
+    # --- Temporal coverage ---
     with st.expander("🕒 Temporal Coverage Plot"):
         st.markdown("""
         The following graph shows the **number of data sets collected over the years**.
@@ -129,7 +126,7 @@ if choice == "Overview":
         plt.xticks(rotation=90)
         st.pyplot(fig)
 
-    # --- Collapsible: Duplicates ---
+    # --- Duplicates ---
     with st.expander("🔁 Duplicate Records"):
         duplicate_count = df.duplicated().sum()
         if duplicate_count > 0:
@@ -145,7 +142,7 @@ if choice == "Overview":
                 "This indicates the dataset is already clean in terms of repeated entries — a good sign!"
             )
 
-    # --- Collapsible: Outlier detection ---
+    # --- Outlier detection ---
     with st.expander("🚨 Outlier Detection (Z-score > 3)"):
         st.markdown("""
         Extreme values (Z-score > 3) may indicate **measurement errors or unusual events**. 
@@ -174,6 +171,7 @@ if choice == "Overview":
         It is also makes sense that air temperature and sea surface temperature have the highest number of outliers due to the conditions during ENSO events.
         """)
 
+
 # ================================================
 # Tab 2: Missingness
 # ================================================
@@ -184,7 +182,7 @@ elif choice == "Missingness":
     Understanding **which variables and time periods are missing** is critical before performing imputation or trend analyses.
     """)
 
-    # --- Collapsible: Missingness table ---
+    # --- Missingness table ---
     with st.expander("📋 Missingness Summary Table"):
         summary_table = pd.DataFrame(
             {
@@ -194,7 +192,7 @@ elif choice == "Missingness":
         ).sort_values("Missing Values", ascending=False)
         st.dataframe(summary_table.astype(str))
 
-    # --- Collapsible: Heatmap ---
+    # --- Missingess Heatmap ---
     with st.expander("🌡 Missingness Heatmap"):
         st.markdown("""
         Missing data can reveal patterns about how and when measurements were taken, and they influence how we handle imputation.
@@ -233,7 +231,7 @@ elif choice == "Missingness":
         plt.tight_layout()
         st.pyplot(fig)
 
-    # --- Humidity Imputation (kept outside collapsible) ---
+    # --- Humidity Imputation ---
     st.subheader("Humidity Imputation")
     st.markdown("""
     Missing humidity values can be imputed using a **linear regression model** based on air temperature and sea surface temperature. 
@@ -242,7 +240,6 @@ elif choice == "Missingness":
     """)
 
     if st.button("Run Humidity Imputation"):
-        # --- Preserve original humidity if not already saved ---
         if "humidity_original" not in df.columns:
             df["humidity_original"] = df["humidity"].copy()
 
@@ -254,11 +251,11 @@ elif choice == "Missingness":
             lambda x: x.isna().mean()
         )
 
-        # --- Choose years where missing rate is BELOW threshold (e.g., 50%) ---
+        # --- Choose years where missing rate is above threshold ---
         threshold = 0.4
         years_allowed = missing_per_year[missing_per_year >= threshold].index
 
-        # --- Training data: only measured rows with predictors ---
+        # --- Training data: only measured where predictors are not missing ---
         mask_train = df[feature_cols].notna().all(axis=1) & df[target_col].notna()
         X_train = df.loc[mask_train, feature_cols]
         y_train = df.loc[mask_train, target_col]
@@ -270,7 +267,6 @@ elif choice == "Missingness":
         # --- Residual standard deviation for stochastic noise ---
         residual_std = np.std(y_train - model.predict(X_train))
 
-        # --- Rows to impute: predictors present, humidity missing, year allowed ---
         mask_impute = (
             df[feature_cols].notna().all(axis=1)
             & df[target_col].isna()
@@ -278,7 +274,7 @@ elif choice == "Missingness":
         )
         X_missing = df.loc[mask_impute, feature_cols]
 
-        # --- Stochastic imputation (e.g., 100 simulations) ---
+        # --- Stochastic imputation ---
         n_simulations = 100
         stochastic_predictions = []
         for _ in range(n_simulations):
@@ -539,7 +535,7 @@ This tab combines **correlation statistics and scatterplots** to explore these l
     selected_features = ["zon_winds", "mer_winds", "humidity", "air_temp", "ss_temp"]
     subset_df = df[selected_features].apply(pd.to_numeric, errors="coerce").dropna()
 
-    # --- Correlation heatmap ---
+    # ================= Correlation heatmap =================
     st.subheader("🔸 Correlation Heatmap")
     st.markdown(
         "The heatmap quantifies **linear correlations** (Pearson) between all variables."
@@ -562,7 +558,7 @@ This tab combines **correlation statistics and scatterplots** to explore these l
             showscale=True,
         )
     )
-    # Annotate values
+
     for i, row in enumerate(masked_corr):
         for j, val in enumerate(row):
             if val is not None:
@@ -582,7 +578,7 @@ This tab combines **correlation statistics and scatterplots** to explore these l
     )
     st.plotly_chart(fig_corr, use_container_width=True)
 
-    # --- Pairwise scatter matrix (moved up + colored) ---
+    # ================= Pairwise scatterplots =================
     st.subheader("🔸 Pairwise Relationships")
     st.markdown("""
 To get a better understanding of the realationship between different feature, the scatter matrix lets us **inspect all variable pairs simultaneously**.  
@@ -602,7 +598,7 @@ Here, points are colored by **air temperature**, which helps reveal ENSO-related
     fig_matrix.update_layout(height=800, width=800)
     st.plotly_chart(fig_matrix, use_container_width=True)
 
-    # --- Scatter with regression (moved down) ---
+    # ================= Scatterplot with regression line for air temp vs sea surface temp  =================
     st.subheader("🔸 Air Temperature vs Sea Surface Temperature")
     st.markdown("""
 As can be seen from the graphs above, there is a strong correlation between air temperature and sea surface temperature. Since the ocean warms the air directly above it, we expect a **close linear relationship** between SST and air temperature.
@@ -630,49 +626,45 @@ This scatter plot confirms this relationship with a red regression line.
     )
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # --- Binned line plots ---
+    # ================= Binned line plots =================
     st.subheader("🔸 Binned SST by Air Temperature")
     st.markdown("""
     Air temperature values are **grouped into bins** to highlight seasonal trends more clearly.  
-    We then plot the **mean SST per air temperature bin across months**, which reduces noise while preserving structure.
+    The line plot below shows **SST values distributed across air temperature bins**, with each bin as a discrete x-axis category.
     """)
 
-    # Use quantile-based binning to avoid empty bins
     num_bins = 15
     df["air_temp_bin"] = pd.qcut(df["air_temp"], q=num_bins, duplicates="drop")
 
-    # Extract bin midpoints for plotting
-    df["air_temp_bin_center"] = df["air_temp_bin"].apply(
-        lambda x: x.mid if pd.notnull(x) else np.nan
-    )
+    # Convert bins to strings for plotting on x-axis
+    df["air_temp_bin_str"] = df["air_temp_bin"].astype(str)
 
-    # Group by bin center and month
+    # Group by bin and month (keep all SST values within the bin)
     binned = (
-        df.groupby(["air_temp_bin_center", "month"], observed=True)["ss_temp"]
+        df.groupby(["air_temp_bin_str", "month"], observed=True)["ss_temp"]
         .mean()
         .reset_index()
-        .sort_values(by=["month", "air_temp_bin_center"])
     )
 
-    # Plot with clear binning on x-axis
     fig_binned = px.line(
         binned,
-        x="air_temp_bin_center",
+        x="air_temp_bin_str",
         y="ss_temp",
         color="month",
         labels={
-            "air_temp_bin_center": "Binned Air Temperature (°C)",
-            "ss_temp": "Mean Sea Surface Temperature (°C)",
+            "air_temp_bin_str": "Air Temperature Bin",
+            "ss_temp": "Sea Surface Temperature (°C)",
             "month": "Month",
         },
-        title="Binned SST vs Air Temperature by Month",
+        title="SST vs Air Temperature Bin by Month",
     )
 
     fig_binned.update_traces(mode="lines+markers", opacity=0.85)
-    fig_binned.update_layout(xaxis=dict(dtick=1))  # optional: force visible ticks
+    fig_binned.update_layout(
+        xaxis=dict(tickangle=-45),  # rotate bin labels for readability
+    )
 
     st.plotly_chart(fig_binned, use_container_width=True)
-
 
 # ----------------------------
 # Tab 5: Summary & Conclusion
@@ -686,6 +678,7 @@ This last tab contains a summary of the **key findings** from the analysis of th
 - **Seasonal and temporal patterns:** Seasonal cycles can be observed for all variables. Violin plots and temporal visualizations illustrate fluctuations over months and years.
 
 """)
+
     # --- Narrative conclusion ---
     st.subheader("🔹 Overall Conclusion")
     st.markdown("""
