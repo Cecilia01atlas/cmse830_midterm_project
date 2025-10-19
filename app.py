@@ -30,14 +30,16 @@ def load_data():
     return df, el_nino
 
 
-# Load dataset
-df, el_nino = load_data()
-
-# Use session state for persistence
-if "df" in st.session_state:
-    df = st.session_state["df"].copy()
-else:
+# ---------------------------------
+# 🧠 Use session state properly
+# ---------------------------------
+if "df" not in st.session_state:
+    df, el_nino = load_data()
     st.session_state["df"] = df.copy()
+    st.session_state["el_nino"] = el_nino
+else:
+    df = st.session_state["df"].copy()
+    el_nino = st.session_state["el_nino"]
 
 # --- Sidebar Menu ---
 menu = [
@@ -205,12 +207,16 @@ Understanding **which variables and time periods are missing** is critical befor
         cmap="cividis",
     )
 
-    ax.set_ylabel("Features")
-    ax.set_title("Missing Values Heatmap (1 = Missing, 0 = Present)")
+    # --- Style improvements ---
+    ax.set_title(
+        "Missing Values Heatmap (1 = Missing, 0 = Present)", fontsize=28, pad=20
+    )
+    ax.set_ylabel("Features", fontsize=24)
+    ax.set_xlabel("Date", fontsize=24)
 
     # Y-axis: feature names
     ax.set_yticks(range(len(cols_for_heatmap)))
-    ax.set_yticklabels(cols_for_heatmap)
+    ax.set_yticklabels(cols_for_heatmap, fontsize=18)
 
     # X-axis: date ticks (up to 15 evenly spaced)
     n_rows = len(df)
@@ -218,10 +224,13 @@ Understanding **which variables and time periods are missing** is critical befor
     tick_positions = np.linspace(0, n_rows - 1, n_ticks).astype(int)
     tick_labels = df.loc[tick_positions, "date"].dt.strftime("%Y-%m-%d")
     ax.set_xticks(tick_positions)
-    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+    ax.set_xticklabels(tick_labels, rotation=45, ha="right", fontsize=16)
 
+    # Grid and colorbar
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
-    fig.colorbar(im, ax=ax, label="Missingness")
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.ax.tick_params(labelsize=16)
+    cbar.set_label("Missingness", fontsize=20)
 
     plt.tight_layout()
     st.pyplot(fig)
@@ -229,28 +238,49 @@ Understanding **which variables and time periods are missing** is critical befor
     # --- Humidity Imputation ---
     st.subheader("Humidity Imputation")
     st.markdown("""
-Missing humidity values can be imputed using a **linear regression model** based on air temperature and sea surface temperature.  
-Stochastic noise is added to mimic natural variability.
-""")
+    Missing humidity values can be imputed using a **linear regression model** based on air temperature and sea surface temperature.  
+    To avoid unreliable imputations, **years with more than 50 % missing humidity data are excluded** from the imputation process.  
+    Additionally, stochastic noise is added to mimic natural variability.
+    """)
+
     if st.button("Run Humidity Imputation"):
-        # Preserve original humidity
+        # --- Preserve original humidity if not already saved ---
         if "humidity_original" not in df.columns:
             df["humidity_original"] = df["humidity"].copy()
 
         feature_cols = ["air_temp", "ss_temp"]
         target_col = "humidity"
+
+        # --- Calculate missing fraction per year ---
+        missing_per_year = df.groupby("year")[target_col].apply(
+            lambda x: x.isna().mean()
+        )
+
+        # --- Choose years where missing rate is BELOW threshold (e.g., 50%) ---
+        threshold = 0.5
+        years_allowed = missing_per_year[missing_per_year <= threshold].index
+
+        # --- Training data: only measured rows with predictors ---
         mask_train = df[feature_cols].notna().all(axis=1) & df[target_col].notna()
         X_train = df.loc[mask_train, feature_cols]
         y_train = df.loc[mask_train, target_col]
 
+        # --- Fit linear regression ---
         model = LinearRegression()
         model.fit(X_train, y_train)
+
+        # --- Residual standard deviation for stochastic noise ---
         residual_std = np.std(y_train - model.predict(X_train))
 
-        mask_impute = df[feature_cols].notna().all(axis=1) & df[target_col].isna()
+        # --- Rows to impute: predictors present, humidity missing, year allowed ---
+        mask_impute = (
+            df[feature_cols].notna().all(axis=1)
+            & df[target_col].isna()
+            & df["year"].isin(years_allowed)
+        )
         X_missing = df.loc[mask_impute, feature_cols]
 
-        # Stochastic imputation
+        # --- Stochastic imputation (e.g., 100 simulations) ---
         n_simulations = 100
         stochastic_predictions = []
         for _ in range(n_simulations):
@@ -258,10 +288,11 @@ Stochastic noise is added to mimic natural variability.
             stochastic_predictions.append(model.predict(X_missing) + noise)
         y_imputed = np.mean(stochastic_predictions, axis=0)
 
+        # --- Assign imputed values ---
         df.loc[mask_impute, target_col] = y_imputed
         st.session_state["df"] = df.copy()
 
-        # Plot before vs imputed
+        # --- Plot before vs imputed ---
         fig, ax = plt.subplots(figsize=(14, 5))
         ax.scatter(
             df.loc[mask_impute, "date"],
@@ -275,12 +306,17 @@ Stochastic noise is added to mimic natural variability.
         )
         ax.set_xlabel("Date")
         ax.set_ylabel("Humidity (%)")
-        ax.set_title("Humidity After Imputation")
+        ax.set_title(
+            f"Humidity After Imputation (Years > {int(threshold * 100)}% Missing Excluded)"
+        )
         ax.legend()
         st.pyplot(fig)
+
+        # --- Diagnostics ---
         st.success("Humidity imputation complete ✅")
         st.write("Remaining missing values per column after imputation:")
-        st.write(df.isna().sum().astype(str))
+        st.write(df.isna().sum())
+
 
 # ================================================
 # Tab 3: Temporal Coverage
