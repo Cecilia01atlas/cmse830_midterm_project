@@ -54,18 +54,14 @@ choice = st.sidebar.radio("Menu", menu)
 if choice == "Overview":
     st.title("🌊 Dataset Overview")
 
-    # --- Quick Summary at the Top ---
-    total_records = len(df)
-    total_features = df.shape[1]
+    ## Key metrics panel
+    total_rows = len(df)
+    total_cols = len(df.columns)
     total_missing = df.isna().sum().sum()
-    missing_percent = (total_missing / (total_records * total_features)) * 100
-
-    st.markdown(f"""
-    ### 📊 Quick Summary
-    | Total Records | Total Features | Total Missing Values | Missing (%) |
-    |---------------|----------------|-----------------------|-------------|
-    | {total_records:,} | {total_features} | {total_missing:,} | {missing_percent:.2f}% |
-    """)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Records", total_rows)
+    col2.metric("Total Features", total_cols)
+    col3.metric("Missing Values", total_missing)
 
     st.markdown("""
     The goal of this app is to provide interactive illustration to highlight the influence of a influencial climatique events called ENSO (El Niño & La Niña). Two datasets were merged for this purpose. These datasets contain measurements of **ocean-atmosphere variables** over time, including:
