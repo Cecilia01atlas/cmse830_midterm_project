@@ -56,7 +56,7 @@ menu = [
 with st.sidebar:
     st.image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/El_Ni%C3%B1o.png/320px-El_Ni%C3%B1o.png",
-        use_column_width=True,
+        use_container_width=True,
     )
     st.title("🌐 ENSO Explorer")
     st.markdown(
