@@ -66,7 +66,6 @@ through interactive visualizations and imputation tools.
 # Tab 1: Overview
 # =========================
 if choice == "Overview":
-    # Top-level intro goes here
     st.title("🌊 Dataset Overview")
     st.markdown("""
     Welcome to the **ENSO Explorer App**, an interactive platform ..
@@ -84,7 +83,7 @@ if choice == "Overview":
     st.markdown("""
     Two datasets were merged for this app. These datasets contain measurements of **ocean-atmosphere variables** over time, including:
 
-    - Sea Surface Temperature (SST)
+    - Sea Surface Temperature (Sea Surface Temperature)
     - Air Temperature
     - Humidity
     - Zonal and Meridional Winds
@@ -95,14 +94,35 @@ if choice == "Overview":
 
     # --- Column info ---
     with st.expander("📋 Column Information"):
-        col_info = pd.DataFrame(
-            {
-                "Column": df.columns,
-                "Type": df.dtypes.values,
-                "Missing Values": df.isna().sum().values,
-            }
-        )
-        st.dataframe(col_info.astype(str))
+        # Define descriptions for your key columns
+        descriptions = {
+            "year": "Year of observation",
+            "month": "Month of observation",
+            "day": "Day of observation",
+            "date": "Datetime object combining year, month, day",
+            "ss_temp": "Sea Surface Temperature (°C)",
+            "air_temp": "Air Temperature (°C)",
+            "humidity": "Relative Humidity (%)",
+            "zon_winds": "Zonal Wind Component (east-west)",
+            "mer_winds": "Meridional Wind Component (north-south)",
+            "ClimAdjust": "Climatological adjustment applied to Sea Surface Temperature",
+            "ANOM": "ENSO Index (El Niño/La Niña anomaly)",
+            # Add other columns if necessary
+        }
+
+    # Build dataframe
+    col_info = pd.DataFrame(
+        {
+            "Column": df.columns,
+            "Type": df.dtypes.values,
+            "Missing Values": df.isna().sum().values,
+            "Description": [
+                descriptions.get(col, "") for col in df.columns
+            ],  # empty string if no description
+        }
+    )
+
+    st.dataframe(col_info.astype(str))
 
     # --- Summary statistics ---
     with st.expander("📈 Summary Statistics"):
@@ -121,7 +141,6 @@ if choice == "Overview":
         ym_counts = df["year_month"].value_counts().sort_index()
         fig, ax = plt.subplots(figsize=(15, 4))
         ym_counts.plot(ax=ax)
-        ax.set_xlabel("Year-Month")
         ax.set_ylabel("Number of Records")
         plt.xticks(rotation=90)
         st.pyplot(fig)
@@ -579,7 +598,7 @@ This tab combines **correlation statistics and scatterplots** to explore these l
     st.plotly_chart(fig_corr, use_container_width=True)
 
     # ================= Pairwise scatterplots =================
-    st.subheader("🔸 Pairwise Relationships")
+    st.subheader("🔸Pairwise Relationships")
     st.markdown("""
 To get a better understanding of the realationship between different feature, the scatter matrix lets us **inspect all variable pairs simultaneously**.  
 Here, points are colored by **air temperature**, which helps reveal ENSO-related structure and seasonal gradients.
@@ -601,7 +620,7 @@ Here, points are colored by **air temperature**, which helps reveal ENSO-related
     # ================= Scatterplot with regression line for air temp vs sea surface temp  =================
     st.subheader("🔸 Air Temperature vs Sea Surface Temperature")
     st.markdown("""
-As can be seen from the graphs above, there is a strong correlation between air temperature and sea surface temperature. Since the ocean warms the air directly above it, we expect a **close linear relationship** between SST and air temperature.
+As can be seen from the graphs above, there is a strong correlation between air temperature and sea surface temperature. Since the ocean warms the air directly above it, we expect a **close linear relationship** between Sea Surface Temperature and air temperature.
 This scatter plot confirms this relationship with a red regression line.
 """)
 
@@ -627,10 +646,10 @@ This scatter plot confirms this relationship with a red regression line.
     st.plotly_chart(fig_scatter, use_container_width=True)
 
     # ================= Binned line plots =================
-    st.subheader("🔸 Binned SST by Air Temperature")
+    st.subheader("🔸 Binned Sea Surface Temperature by Air Temperature")
     st.markdown("""
     Air temperature values are **grouped into bins** to highlight seasonal trends more clearly.  
-    The line plot below shows **SST values distributed across air temperature bins**, with each bin as a discrete x-axis category.
+    The line plot below shows **Sea Surface Temperature values distributed across air temperature bins**, with each bin as a discrete x-axis category.
     """)
 
     num_bins = 15
@@ -674,7 +693,7 @@ This scatter plot confirms this relationship with a red regression line.
             "ss_temp": "Sea Surface Temperature (°C)",
             "month_name": "Month",
         },
-        title="SST vs Air Temperature Bin by Month",
+        title="Sea Surface Temperature vs Air Temperature Bin by Month",
     )
 
     fig_binned.update_traces(mode="lines+markers", opacity=0.85)
@@ -691,8 +710,8 @@ elif choice == "Summary and Conclusion":
     st.title("📖 Summary and Key Insights")
     st.markdown("""
 This last tab contains a summary of the **key findings** from the analysis of the El Niño/La Niña dataset and a conclusion:
-- **ENSO influence:** El Niño and La Niña events have a strong influence on sea surface temperatures (SST) and air temperatures, while humidity shows only moderate fluctuations. ENSO periods are clearly visible in temporal visualizations and illustrate the coupling between the ocean and the atmosphere.
-- **Variable relationships:** Air temperature and SST show a strong positive correlation, as can be seen from heat maps, scatter plots, and binned line plots. Wind components are also related to temperature and humidity, suggesting broader climatic interactions.
+- **ENSO influence:** El Niño and La Niña events have a strong influence on sea surface temperatures (Sea Surface Temperature) and air temperatures, while humidity shows only moderate fluctuations. ENSO periods are clearly visible in temporal visualizations and illustrate the coupling between the ocean and the atmosphere.
+- **Variable relationships:** Air temperature and Sea Surface Temperature show a strong positive correlation, as can be seen from heat maps, scatter plots, and binned line plots. Wind components are also related to temperature and humidity, suggesting broader climatic interactions.
 - **Seasonal and temporal patterns:** Seasonal cycles can be observed for all variables. Violin plots and temporal visualizations illustrate fluctuations over months and years.
 
 """)
