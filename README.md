@@ -1,11 +1,47 @@
-**Dataset**: [UCI El Niño data set](https://archive.ics.uci.edu/ml/datasets/El+Nino)
+# 🌊 ENSO Interactive Analysis App
 
-I chose this data set because it was very useful for studying the El Niño/La Niña phenomenon. It contains a lot of data with many different columns for different variables such as humidity, wind, and temperatures.
+An interactive **Streamlit** app analyzing the influence of **ENSO (El Niño / La Niña)** events on ocean-atmosphere variables. The app provides exploratory data analysis, visualization, and missing data imputation for key climate variables.
 
-**Summary of progress:**
-1. IDA/EDA: I noticed that there is a significant imbalance in terms of time. There is very little data for the first 10 years compared to the following years. Meaning that the number of observations per year and month varies. I therefore tried to counteract this by defining a different weighting for each year. In addition, a lot of data is missing. For example, humidity was not measured in the early years. This means that the data set has extensive data gaps in the early years, while the later years are more complete. I don't know yet how to deal with this, but I'll see.  
-From the EDA, I learned that there is a strong correlation between air temperature and sea temperature. However, there was only a moderate correlation for the other features, such as wind and humidity. So I created a scatter plot with a regression line. I also took a closer look at the seasonal changes and found that sea surface temperature varies not only over time, but also when grouped by month. I tried to represent this in a voline chart and checked whether it would make more sense to do this with a box plot. I still have to decide which option I will ultimately choose!
+---
 
-2. Preprocessing: So I read the data set and checked the data type of each feature. I also corrected the year format by converting two-digit years (e.g., 80) to four-digit years (e.g., 1980). Next, I created a correct date column from the year, month, and day, and then sorted the data chronologically. I also examined and visualized missing values over time, both globally (heat maps) and for specific variables (e.g., humidity). Finally, I applied a year-based weighting to account for temporal imbalances in the subsequent regression analysis.
+## 📂 Data Sources
 
-3. Streamlit: So I managed to implement my app and add some charts. However, I couldn't really do much as I focused on the IDA/EDA step first, but I have an idea of which visualizations I want to include. Once I have the plan ready, I don't think it should be too difficult to integrate them into the app. From my point of view, all I have to do now is put all the pieces together!
+This project uses two main data sources:
+
+1. **El Niño dataset** from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/dataset/122/el+nino).  
+2. **ENSO Index CSV (`data_index.csv`)** – local CSV containing monthly ENSO indices (ANOM).
+
+Both datasets are merged for analysis of temporal trends, correlations, and event-driven anomalies.
+
+---
+
+## 🖥 App Features
+
+The app consists of **five interactive tabs**, each providing specific analyses:
+
+- **Overview** 🌊  
+  - ✅ Key metrics: total records, features, missing values  
+  - 📋 Column information  
+  - 🚨 Outlier detection  
+  - 🔁 Duplicate detection  
+
+- **Missingness Analysis** 💨  
+  - 📊 Missingness summary table  
+  - 🌡 Missingness heatmap  
+  - 🔧 Humidity imputation using linear regression and stochastic noise  
+
+- **Temporal Coverage** 🌐  
+  - 📅 Daily scatter plots colored by ENSO index  
+  - 📈 Line plots with ENSO event shading  
+  - 📊 Monthly violin plots to show seasonal patterns  
+
+- **Correlation Study** 📊  
+  - 🔸 Correlation heatmap between key variables  
+  - 🔸 Pairwise scatter matrix (colored by air temperature)  
+  - 🔸 Scatter plots with regression line and binned SST vs air temperature plots  
+
+- **Summary & Conclusion** 📖  
+  - 🌊 Insights on ENSO influence  
+  - 📌 Variable relationships  
+  - 📊 Seasonal and temporal patterns  
+  - ✅ Data quality and imputation notes
