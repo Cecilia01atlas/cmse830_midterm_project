@@ -89,6 +89,7 @@ if choice == "Overview":
     - Zonal and Meridional Winds
     - ANOM (ENSO index)
 
+    Most of the data was collected using the TAO (Tropical Atmosphere Ocean) array through mooring measurements.
     Before diving into the analysis of sea-air interactions and El Niño/La Niña patterns, it's important to get a clear picture of the dataset itself — its structure, size, and basic characteristics.
     """)
 
@@ -100,6 +101,8 @@ if choice == "Overview":
             "month": "Month of observation",
             "day": "Day of observation",
             "date": "Datetime object combining year, month, day",
+            "latitude": "Latitude of the measurement location",
+            "longitude": "Longitude of the measurement location",
             "ss_temp": "Sea Surface Temperature (°C)",
             "air_temp": "Air Temperature (°C)",
             "humidity": "Relative Humidity (%)",
