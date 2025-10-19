@@ -24,7 +24,7 @@ def load_data():
     df = df.sort_values("date").reset_index(drop=True)
 
     # Merge ENSO index
-    enso = pd.read_csv("data_index.csv").drop_duplicates(subset=["year", "month"])
+    enso = pd.read_csv("data/data_index.csv").drop_duplicates(subset=["year", "month"])
     df = df.merge(enso, on=["year", "month"], how="left")
 
     return df, el_nino
@@ -693,5 +693,5 @@ ENSO events (El Niño / La Niña) are important drivers of variability in the oc
 Seasonal cycles and long-term trends are evident, and correlations show the connection between different key climate variables.
 To further improve this analysis, future work could incorporate **sea surface temperatures at various depths** rather than just at the surface. Temperature profiles below the surface would provide a more complete picture of ocean dynamics and their role in driving atmospheric responses during ENSO events.
                 
-Final note: AI was used, specifically ChatGPT-5, to improve all the visualizations and implement everything into the app with Streamlit.                
+**Final note**: AI was used, specifically ChatGPT-5, to improve all the visualizations and implement everything into the app with Streamlit.                
 """)
