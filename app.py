@@ -40,7 +40,6 @@ el_nino = st.session_state["el_nino"]
 
 st.set_page_config(
     page_title="ENSO Explorer 🌊",
-    page_icon="🌐",
     layout="wide",
 )
 
@@ -73,7 +72,7 @@ if choice == "Overview":
     # Top-level intro goes here
     st.title("🌊 Dataset Overview")
     st.markdown("""
-    Welcome to the **ENSO Explorer App**, an interactive platform...
+    Welcome to the **ENSO Explorer App**, an interactive platform ..
     """)
 
     ## Key metrics panel
@@ -116,8 +115,8 @@ if choice == "Overview":
     # --- Collapsible: Temporal coverage ---
     with st.expander("🕒 Temporal Coverage Plot"):
         st.markdown("""
-        The plot below shows the **number of records collected per year-month**. 
-        It highlights periods where we have denser observations, which is important for assessing trends and variability over time.
+        The following graph shows the **number of data sets collected over the years**.
+        It highlights periods in which we have denser observations. In particular, it shows that there is an imbalance, as more data was collected later on than in earlier years.
         """)
         df["year_month"] = (
             df["year"].astype(str) + "-" + df["month"].astype(str).str.zfill(2)
@@ -171,15 +170,15 @@ if choice == "Overview":
             pd.DataFrame.from_dict(outlier_dict, orient="index", columns=["Outliers"])
         )
         st.markdown("""
-        In this case there are just a few outliers, not more than 1 %. 
-        It also makes sense that the air temperature and sea surface temperature have the highest number of outliers due to extreme events during ENSO events.
+        In this case, there are only a few outliers, no more than 1% per column.
+        It is also makes sense that air temperature and sea surface temperature have the highest number of outliers due to the conditions during ENSO events.
         """)
 
 # ================================================
 # Tab 2: Missingness
 # ================================================
 elif choice == "Missingness":
-    st.title("💧 Missingness Analysis")
+    st.title("🚧 Missingness Analysis")
     st.markdown("""
     Some variables in the dataset have **missing measurements**, which is common in long-term environmental observations. 
     Understanding **which variables and time periods are missing** is critical before performing imputation or trend analyses.
@@ -323,7 +322,7 @@ elif choice == "Missingness":
 # Tab 3: Temporal Coverage
 # ================================================
 elif choice == "Temporal Coverage":
-    st.header("🌊 Temporal Coverage & ENSO Influence")
+    st.header("📆 Temporal Coverage & ENSO Influence")
     st.markdown("""
 The **Temporal Coverage** tab provides a deeper look at how key climate variables evolve over time.  
 This is where we highlight the influence of **ENSO events (El Niño & La Niña)** on variables such as
@@ -530,7 +529,7 @@ elif choice == "Correlation study":
 Understanding how **atmospheric and oceanic variables interact** is crucial to explaining ENSO.
 
 - 🌡 **Air ↔ Sea Surface Temperature**: warming of the Pacific surface during El Niño affects atmospheric patterns.  
-- 💨 **Winds**: zonal (east-west) and meridional (north-south) winds drive currents and influence upwelling.  
+- 💨 **Winds**: zonal (east-west) and meridional (north-south) winds drive currents.  
 - 💧 **Humidity**: links evaporation from oceans with atmospheric moisture content.  
 
 This tab combines **correlation statistics and scatterplots** to explore these links.
@@ -606,8 +605,8 @@ Here, points are colored by **air temperature**, which helps reveal ENSO-related
     # --- Scatter with regression (moved down) ---
     st.subheader("🔸 Air Temperature vs Sea Surface Temperature")
     st.markdown("""
-As can be noticed with the plots above, there is a strong correlation between air temperature and sea surface temperature. Because the ocean warms the air directly above it, we expect a **tight linear relationship** between SST and air temperature.  
-This scatter plot confirms that relationship, with a regression line shown in red.
+As can be seen from the graphs above, there is a strong correlation between air temperature and sea surface temperature. Since the ocean warms the air directly above it, we expect a **close linear relationship** between SST and air temperature.
+This scatter plot confirms this relationship with a red regression line.
 """)
 
     fig_scatter = px.scatter(
@@ -681,25 +680,18 @@ This scatter plot confirms that relationship, with a regression line shown in re
 elif choice == "Summary and Conclusion":
     st.title("📖 Summary and Key Insights")
     st.markdown("""
-This final tab presents the **key insights** from the analysis of the El Niño / La Niña dataset:
+This last tab contains a summary of the **key findings** from the analysis of the El Niño/La Niña dataset and a conclusion:
+- **ENSO influence:** El Niño and La Niña events have a strong influence on sea surface temperatures (SST) and air temperatures, while humidity shows only moderate fluctuations. ENSO periods are clearly visible in temporal visualizations and illustrate the coupling between the ocean and the atmosphere.
+- **Variable relationships:** Air temperature and SST show a strong positive correlation, as can be seen from heat maps, scatter plots, and binned line plots. Wind components are also related to temperature and humidity, suggesting broader climatic interactions.
+- **Seasonal and temporal patterns:** Seasonal cycles can be observed for all variables. Violin plots and temporal visualizations illustrate fluctuations over months and years.
 
-- **ENSO Influence:** El Niño and La Niña events strongly affect sea surface temperatures (SST) and air temperatures, with humidity showing moderate variations. ENSO periods are clearly visible in temporal visualizations, underscoring the tight coupling between the ocean and atmosphere.
-
-- **Variable Relationships:** Air temperature and SST exhibit a strong positive correlation, as seen in heatmaps, scatterplots, and binned line plots. Wind components are also related to temperature and humidity, indicating broader climate interactions.
-
-- **Seasonal and Temporal Patterns:** Pronounced seasonal cycles are observed across all variables. Violin plots and temporal visualizations highlight fluctuations over months and years, revealing both cyclical and event-driven variability.
-
-- **Data Quality:** Missing values, particularly in humidity, were imputed using regression-based stochastic methods. This approach preserves variability while enabling more robust analysis without introducing systematic bias.
 """)
-
     # --- Narrative conclusion ---
     st.subheader("🔹 Overall Conclusion")
     st.markdown("""
-ENSO events (El Niño / La Niña) are major drivers of variability in the ocean–atmosphere system.  
-Seasonal cycles and long-term trends are evident, and correlations highlight the interconnected nature of key climate variables.  
-Careful handling of data quality, including the imputation of missing humidity values, ensures the robustness of these findings.
-
-To further improve this analysis, future work could incorporate **sea surface temperatures at different depths**, not just at the surface. Subsurface temperature profiles would provide a more complete picture of ocean dynamics and their role in driving atmospheric responses during ENSO events.
-
-Overall, this study highlights the importance of combining **statistical methods, temporal analysis, and visualization** to uncover meaningful patterns in climate datasets.
+ENSO events (El Niño / La Niña) are important drivers of variability in the ocean-atmosphere system.
+Seasonal cycles and long-term trends are evident, and correlations show the connection between different key climate variables.
+To further improve this analysis, future work could incorporate **sea surface temperatures at various depths** rather than just at the surface. Temperature profiles below the surface would provide a more complete picture of ocean dynamics and their role in driving atmospheric responses during ENSO events.
+                
+Final note: AI was used, specifically ChatGPT-5, to improve all the visualizations and implement everything into the app with Streamlit.                
 """)
