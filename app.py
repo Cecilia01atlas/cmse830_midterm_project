@@ -627,24 +627,18 @@ This scatter plot confirms this relationship with a red regression line.
     st.plotly_chart(fig_scatter, use_container_width=True)
 
     # ================= Binned line plots =================
+    # ================= Binned line plots =================
     st.subheader("🔸 Binned SST by Air Temperature")
     st.markdown("""
     Air temperature values are **grouped into bins** to highlight seasonal trends more clearly.  
-    We then plot **SST vs air temperature bins**, colored by month to reveal seasonal patterns.
+    The line plot below shows **SST values distributed across air temperature bins**, with each bin as a discrete x-axis category.
     """)
 
     num_bins = 15
-
-    # Create quantile-based bins for air temperature
     df["air_temp_bin"] = pd.qcut(df["air_temp"], q=num_bins, duplicates="drop")
+    df["air_temp_bin_str"] = df["air_temp_bin"].astype(str)
 
-    # Remove any rows where bin is NaN
-    df_binned = df[df["air_temp_bin"].notna()].copy()
-
-    # Convert bin to string for x-axis
-    df_binned["air_temp_bin_str"] = df_binned["air_temp_bin"].astype(str)
-
-    # Map month numbers to names
+    # Map month numbers to names and define ordered categorical
     month_labels = [
         "Jan",
         "Feb",
@@ -659,28 +653,39 @@ This scatter plot confirms this relationship with a red regression line.
         "Nov",
         "Dec",
     ]
-    df_binned["month_name"] = df_binned["month"].apply(lambda x: month_labels[x - 1])
+    df["month_name"] = pd.Categorical(
+        df["month"].map(dict(zip(range(1, 13), month_labels))),
+        categories=month_labels,
+        ordered=True,
+    )
 
-    # Ensure month order in legend
-    month_order = month_labels
+    # Group by bin and month_name
+    binned = (
+        df.groupby(["air_temp_bin_str", "month_name"], observed=True)["ss_temp"]
+        .mean()
+        .reset_index()
+    )
 
-    # Plot using bin labels on x-axis
     fig_binned = px.line(
-        df_binned,
+        binned,
         x="air_temp_bin_str",
         y="ss_temp",
         color="month_name",
-        category_orders={"month_name": month_order},  # keeps months in order
+        category_orders={
+            "month_name": month_labels
+        },  # ensures correct order in legend and lines
         labels={
-            "air_temp_bin_str": "Air Temperature Bin (°C)",
+            "air_temp_bin_str": "Air Temperature Bin",
             "ss_temp": "Sea Surface Temperature (°C)",
             "month_name": "Month",
         },
-        title="Binned SST vs Air Temperature by Month",
+        title="SST vs Air Temperature Bin by Month",
     )
 
     fig_binned.update_traces(mode="lines+markers", opacity=0.85)
-    fig_binned.update_layout(xaxis_tickangle=-45)
+    fig_binned.update_layout(
+        xaxis=dict(tickangle=-45),  # rotate bin labels for readability
+    )
 
     st.plotly_chart(fig_binned, use_container_width=True)
 
