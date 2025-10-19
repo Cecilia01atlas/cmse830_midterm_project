@@ -144,6 +144,7 @@ if choice == "Overview":
         ym_counts = df["year_month"].value_counts().sort_index()
         fig, ax = plt.subplots(figsize=(15, 4))
         ym_counts.plot(ax=ax)
+        ax.set_xlabel("Year")
         ax.set_ylabel("Number of Records")
         plt.xticks(rotation=90)
         st.pyplot(fig)
