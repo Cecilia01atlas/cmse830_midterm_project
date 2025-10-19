@@ -38,7 +38,13 @@ if "df" not in st.session_state:
 df = st.session_state["df"]
 el_nino = st.session_state["el_nino"]
 
-# --- Sidebar Menu ---
+st.set_page_config(
+    page_title="ENSO Explorer 🌊",
+    page_icon="🌐",
+    layout="wide",
+)
+
+# --- Sidebar ---
 menu = [
     "Overview",
     "Missingness",
@@ -46,13 +52,33 @@ menu = [
     "Correlation study",
     "Summary and Conclusion",
 ]
-choice = st.sidebar.radio("Menu", menu)
 
-# ================================================
-# Tab 1: Overview
-# ================================================
+with st.sidebar:
+    st.image(
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/El_Ni%C3%B1o.png/320px-El_Ni%C3%B1o.png",
+        use_column_width=True,
+    )
+    st.title("🌐 ENSO Explorer")
+    st.markdown(
+        """
+Explore the **impact of El Niño & La Niña** on ocean–atmosphere variables  
+through interactive visualizations and imputation tools.
+"""
+    )
+    st.markdown("---")
+    choice = st.radio("Navigate to:", menu)
+
+# =========================
+# 2. TAB CONTENT
+# =========================
+
+# --- Overview Tab ---
 if choice == "Overview":
+    # Top-level intro goes here
     st.title("🌊 Dataset Overview")
+    st.markdown("""
+    Welcome to the **ENSO Explorer App**, an interactive platform...
+    """)
 
     ## Key metrics panel
     total_rows = len(df)
@@ -64,7 +90,7 @@ if choice == "Overview":
     col3.metric("Missing Values", total_missing)
 
     st.markdown("""
-    The goal of this app is to provide interactive illustration to highlight the influence of a influencial climatique events called ENSO (El Niño & La Niña). Two datasets were merged for this purpose. These datasets contain measurements of **ocean-atmosphere variables** over time, including:
+    Two datasets were merged for this app. These datasets contain measurements of **ocean-atmosphere variables** over time, including:
 
     - Sea Surface Temperature (SST)
     - Air Temperature
