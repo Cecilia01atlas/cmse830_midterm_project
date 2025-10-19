@@ -637,22 +637,26 @@ This scatter plot confirms this relationship with a red regression line.
     df["air_temp_bin"] = pd.qcut(df["air_temp"], q=num_bins, duplicates="drop")
     df["air_temp_bin_str"] = df["air_temp_bin"].astype(str)
 
-    # Map month numbers to names for the legend
-    month_labels = {
-        1: "Jan",
-        2: "Feb",
-        3: "Mar",
-        4: "Apr",
-        5: "May",
-        6: "Jun",
-        7: "Jul",
-        8: "Aug",
-        9: "Sep",
-        10: "Oct",
-        11: "Nov",
-        12: "Dec",
-    }
-    df["month_name"] = df["month"].map(month_labels)
+    # Map month numbers to names and define ordered categorical
+    month_labels = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
+    df["month_name"] = pd.Categorical(
+        df["month"].map(dict(zip(range(1, 13), month_labels))),
+        categories=month_labels,
+        ordered=True,
+    )
 
     # Group by bin and month_name
     binned = (
@@ -666,6 +670,9 @@ This scatter plot confirms this relationship with a red regression line.
         x="air_temp_bin_str",
         y="ss_temp",
         color="month_name",
+        category_orders={
+            "month_name": month_labels
+        },  # ensures correct order in legend and lines
         labels={
             "air_temp_bin_str": "Air Temperature Bin",
             "ss_temp": "Sea Surface Temperature (°C)",
