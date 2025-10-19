@@ -55,13 +55,14 @@ choice = st.sidebar.radio("Menu", menu)
 if choice == "Overview":
     st.title("🌊 Dataset Overview")
     st.markdown("""
-This dataset contains measurements of **ocean-atmosphere variables** over time, including:
+The goal of this app is to provide interactive illustration to highlight the influence of a influencial climatique events called ENSO (El Niño & La Niña). Two datasets were merged for this purpose. These datasets contain measurements of **ocean-atmosphere variables** over time, including:
 - Sea Surface Temperature (SST)
 - Air Temperature
 - Humidity
 - Zonal and Meridional Winds
+- ANOM (ENSO index)
 
-Before diving into the analysis of sea–air interactions and El Niño/La Niña patterns, 
+Before diving into the analysis of sea-air interactions and El Niño/La Niña patterns, 
 it's important to get a clear picture of the dataset itself — its structure, size, 
 and basic characteristics. This tab provides a quick overview and initial checks.
 
@@ -106,9 +107,22 @@ It highlights periods where we have denser observations, which is important for 
     st.pyplot(fig)
 
     # --- Duplicates ---
-    st.subheader("Duplicates in Dataset")
-    duplicates = df.duplicated().sum()
-    st.write(f"Number of duplicate rows: {duplicates}")
+    st.subheader("🔁 Duplicate Records")
+
+    duplicate_count = df.duplicated().sum()
+
+    if duplicate_count > 0:
+        st.warning(f"⚠️ There are {duplicate_count} duplicate rows in the dataset.")
+        st.dataframe(df[df.duplicated()].head(10))
+        st.markdown(
+            "Duplicate records may arise from repeated measurements or data logging errors. "
+            "These should be examined to avoid skewing the analysis."
+        )
+    else:
+        st.success("✅ No duplicate records found in the dataset.")
+        st.markdown(
+            "This indicates the dataset is already clean in terms of repeated entries — a good sign!"
+        )
 
     # --- Outlier detection ---
     st.subheader("Outlier Detection (Z-score > 3)")
@@ -133,6 +147,9 @@ Understanding these outliers helps ensure robust analyses.
             outlier_dict[col] = outliers
     st.write(pd.DataFrame.from_dict(outlier_dict, orient="index", columns=["Outliers"]))
 
+    st.markdown("""
+In this case there are just a few outlier, not more than 1 %. It also makes sense that the air temperature and sea surface temperature have the heighest number of outliers due to extreme events during ENSO events.
+""")
 
 # ================================================
 # Tab 2: Missingness
@@ -212,7 +229,7 @@ Understanding **which variables and time periods are missing** is critical befor
     # --- Humidity Imputation ---
     st.subheader("Humidity Imputation")
     st.markdown("""
-Missing humidity values are imputed using a **linear regression model** based on air temperature and sea surface temperature.  
+Missing humidity values can be imputed using a **linear regression model** based on air temperature and sea surface temperature.  
 Stochastic noise is added to mimic natural variability.
 """)
     if st.button("Run Humidity Imputation"):
@@ -476,7 +493,7 @@ elif choice == "Correlation study":
 Understanding how **atmospheric and oceanic variables interact** is crucial to explaining ENSO.
 
 - 🌡 **Air ↔ Sea Surface Temperature**: warming of the Pacific surface during El Niño affects atmospheric patterns.  
-- 💨 **Winds**: zonal (east–west) and meridional (north–south) winds drive currents and influence upwelling.  
+- 💨 **Winds**: zonal (east-west) and meridional (north-south) winds drive currents and influence upwelling.  
 - 💧 **Humidity**: links evaporation from oceans with atmospheric moisture content.  
 
 This tab combines **correlation statistics and scatterplots** to explore these links.
@@ -532,7 +549,7 @@ This tab combines **correlation statistics and scatterplots** to explore these l
     # --- Pairwise scatter matrix (moved up + colored) ---
     st.subheader("🔸 Pairwise Relationships")
     st.markdown("""
-The scatter matrix lets us **inspect all variable pairs simultaneously**.  
+To get a better understanding of the realationship between different feature, the scatter matrix lets us **inspect all variable pairs simultaneously**.  
 Here, points are colored by **air temperature**, which helps reveal ENSO-related structure and seasonal gradients.
 """)
 
@@ -552,7 +569,7 @@ Here, points are colored by **air temperature**, which helps reveal ENSO-related
     # --- Scatter with regression (moved down) ---
     st.subheader("🔸 Air Temperature vs Sea Surface Temperature")
     st.markdown("""
-Because the ocean warms the air directly above it, we expect a **tight linear relationship** between SST and air temperature.  
+As can be noticed with the plots above, there is a strong correlation between air temperature and sea surface temperature. Because the ocean warms the air directly above it, we expect a **tight linear relationship** between SST and air temperature.  
 This scatter plot confirms that relationship, with a regression line shown in red.
 """)
 
@@ -580,13 +597,28 @@ This scatter plot confirms that relationship, with a regression line shown in re
     # --- Binned line plots ---
     st.subheader("🔸 Binned SST by Air Temperature")
     st.markdown("""
-Here, **air temperature values are grouped into bins**, and we plot the **mean SST per bin across months**.  
-This reduces noise and highlights seasonal trends.
-""")
-    df["air_temp_bin"] = pd.cut(df["air_temp"], bins=15)
-    binned = df.groupby(["air_temp_bin", "month"])["ss_temp"].mean().reset_index()
-    binned["air_temp_bin_center"] = binned["air_temp_bin"].apply(lambda x: x.mid)
+    Air temperature values are **grouped into bins** to highlight seasonal trends more clearly.  
+    We then plot the **mean SST per air temperature bin across months**, which reduces noise while preserving structure.
+    """)
 
+    # Use quantile-based binning to avoid empty bins
+    num_bins = 15
+    df["air_temp_bin"] = pd.qcut(df["air_temp"], q=num_bins, duplicates="drop")
+
+    # Extract bin midpoints for plotting
+    df["air_temp_bin_center"] = df["air_temp_bin"].apply(
+        lambda x: x.mid if pd.notnull(x) else np.nan
+    )
+
+    # Group by bin center and month
+    binned = (
+        df.groupby(["air_temp_bin_center", "month"], observed=True)["ss_temp"]
+        .mean()
+        .reset_index()
+        .sort_values(by=["month", "air_temp_bin_center"])
+    )
+
+    # Plot with clear binning on x-axis
     fig_binned = px.line(
         binned,
         x="air_temp_bin_center",
@@ -599,6 +631,10 @@ This reduces noise and highlights seasonal trends.
         },
         title="Binned SST vs Air Temperature by Month",
     )
+
+    fig_binned.update_traces(mode="lines+markers", opacity=0.85)
+    fig_binned.update_layout(xaxis=dict(dtick=1))  # optional: force visible ticks
+
     st.plotly_chart(fig_binned, use_container_width=True)
 
 
@@ -610,22 +646,23 @@ elif choice == "Summary and Conclusion":
     st.markdown("""
 This final tab presents the **key insights** from the analysis of the El Niño / La Niña dataset:
 
-- **ENSO Influence:** El Niño and La Niña events strongly affect sea surface temperatures (SST) and air temperatures, with humidity showing moderate variations. ENSO periods are clearly visible in temporal visualizations and highlight the coupling between ocean and atmosphere.
+- **ENSO Influence:** El Niño and La Niña events strongly affect sea surface temperatures (SST) and air temperatures, with humidity showing moderate variations. ENSO periods are clearly visible in temporal visualizations, underscoring the tight coupling between the ocean and atmosphere.
 
-- **Variable Relationships:** Air temperature and SST are highly correlated, as seen in correlation heatmaps, scatterplots, and binned line plots. Wind components also show relationships with temperature and humidity, suggesting broader climate interactions.
+- **Variable Relationships:** Air temperature and SST exhibit a strong positive correlation, as seen in heatmaps, scatterplots, and binned line plots. Wind components are also related to temperature and humidity, indicating broader climate interactions.
 
-- **Seasonal and Temporal Patterns:** Seasonal cycles are apparent in all variables. Violin plots and temporal visualizations highlight how climate features fluctuate over months and years.
+- **Seasonal and Temporal Patterns:** Pronounced seasonal cycles are observed across all variables. Violin plots and temporal visualizations highlight fluctuations over months and years, revealing both cyclical and event-driven variability.
 
-- **Data Quality:** Missing values, particularly in humidity, were carefully imputed using regression-based stochastic methods, ensuring the dataset supports reliable insights without introducing bias.
+- **Data Quality:** Missing values, particularly in humidity, were imputed using regression-based stochastic methods. This approach preserves variability while enabling more robust analysis without introducing systematic bias.
 """)
 
     # --- Narrative conclusion ---
     st.subheader("🔹 Overall Conclusion")
     st.markdown("""
-- ENSO events (El Niño / La Niña) are major drivers of variability in the ocean-atmosphere system.  
-- Air temperature and sea surface temperature respond strongly to these events, while humidity shows moderate fluctuations.  
-- Seasonal cycles and long-term trends are apparent, with correlations highlighting interdependencies among variables.  
-- Data quality, including imputation of missing humidity, ensures that these insights are robust.  
+ENSO events (El Niño / La Niña) are major drivers of variability in the ocean–atmosphere system.  
+Seasonal cycles and long-term trends are evident, and correlations highlight the interconnected nature of key climate variables.  
+Careful handling of data quality, including the imputation of missing humidity values, ensures the robustness of these findings.
 
-This analysis demonstrates the **importance of ENSO in global climate variability** and shows how a combination of visualization, correlation studies, and imputation strategies can provide a comprehensive understanding of climate datasets.
+To further improve this analysis, future work could incorporate **sea surface temperatures at different depths**, not just at the surface. Subsurface temperature profiles would provide a more complete picture of ocean dynamics and their role in driving atmospheric responses during ENSO events.
+
+Overall, this study highlights the importance of combining **statistical methods, temporal analysis, and visualization** to uncover meaningful patterns in climate datasets.
 """)
