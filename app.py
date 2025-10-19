@@ -125,7 +125,7 @@ if choice == "Overview":
             }
         )
 
-    st.dataframe(col_info.astype(str))
+        st.dataframe(col_info.astype(str))
 
     # --- Summary statistics ---
     with st.expander("📈 Summary Statistics"):
